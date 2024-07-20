@@ -42,6 +42,7 @@ module IF_stage (
   assign IF_ready_go = 1'b1;
   assign IF_allowin  = ~IF_valid | IF_ready_go & ID_allowin;
   assign IF_ID_valid = IF_valid & IF_ready_go;
+  
   always @(posedge clk) begin
     if (~resetn) IF_valid <= 1'b0;
     else if (IF_allowin)

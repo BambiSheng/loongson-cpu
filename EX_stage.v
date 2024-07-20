@@ -46,11 +46,25 @@ module EX_stage (
   //------------------------------ID TO EX---------------------------------------
   always @(posedge clk) begin
     if (~resetn)
-      {EX_alu_op, EX_res_from_mem, EX_alu_src1, EX_alu_src2,
-             EX_mem_we, EX_rf_we, EX_rf_waddr, EX_rkd_value, EX_pc} <= {`ID_EX_LEN{1'b0}};
+      {EX_alu_op, 
+      EX_res_from_mem, 
+      EX_alu_src1, 
+      EX_alu_src2,
+      EX_mem_we, 
+      EX_rf_we, 
+      EX_rf_waddr, 
+      EX_rkd_value, 
+      EX_pc} <= {`ID_EX_LEN{1'b0}};
     else if (ID_EX_valid & EX_allowin)
-      {EX_alu_op, EX_res_from_mem, EX_alu_src1, EX_alu_src2,
-             EX_mem_we, EX_rf_we, EX_rf_waddr, EX_rkd_value, EX_pc} <= ID_EX_bus;
+      {EX_alu_op, 
+      EX_res_from_mem, 
+      EX_alu_src1, 
+      EX_alu_src2,
+      EX_mem_we, 
+      EX_rf_we, 
+      EX_rf_waddr, 
+      EX_rkd_value, 
+      EX_pc} <= ID_EX_bus;
   end
 
 
@@ -64,8 +78,6 @@ module EX_stage (
       .alu_result(EX_alu_result),
       .complete  (alu_complete)
   );
-
-
 
   //------------------------------rf bus--------------------------------------- 
   assign EX_rf_bus = {EX_res_from_mem & EX_valid, EX_rf_we & EX_valid, EX_rf_waddr, EX_alu_result};

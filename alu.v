@@ -126,10 +126,11 @@ Wallace_Mul u_mul(
     .mul_clk(clk),
     .resetn(resetn),
     .mul_signed(op_mulh|op_mul),
-    .A(alu_src1),
-    .B(alu_src2),
+    .x(alu_src1),
+    .y(alu_src2),
     .result(mul_result)
 );
+
 assign mul_en = op_mul | op_mulh | op_mulhu;
 assign div_en = op_mod | op_modu | op_div | op_divu;
 Div u_div(

@@ -143,7 +143,7 @@ module ID_stage (
   //------------------------------state control signal---------------------------------------
   assign ID_ready_go = ~ID_stall;
   assign ID_allowin  = ~ID_valid | ID_ready_go & EX_allowin;
-  assign ID_stall    = EX_res_from_mem & (hazard_r1_ex & need_r1 | hazard_r2_ex & need_r2);
+  assign ID_stall    = EX_res_from_mem & (hazard_r1_ex & need_r1 | hazard_r2_ex & need_r2);   // load-use冲突
   assign ID_EX_valid = ID_valid & ID_ready_go;
   always @(posedge clk) begin
     if (~resetn) ID_valid <= 1'b0;
@@ -160,15 +160,15 @@ module ID_stage (
     end
   end
 
+  //提前判断分支跳转条件
   assign rj_eq_rd = (rj_value == rkd_value);
   assign br_taken = (inst_beq  &&  rj_eq_rd
                     || inst_bne  && !rj_eq_rd
                     || inst_jirl
                     || inst_bl
                     || inst_b
-                    ) && ID_valid;
-  assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (ID_pc + br_offs) :
-                                                   /*inst_jirl*/ (rj_value + jirl_offs);
+                    ) && ID_valid;    // 分支跳转条件
+  assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (ID_pc + br_offs) :(rj_value + jirl_offs);       // 分支目标地址
   assign br_bus = {br_taken, br_target};
   //------------------------------decode instruction---------------------------------------
 
@@ -243,6 +243,8 @@ module ID_stage (
   assign inst_lu12i_w = op_31_26_d[6'h05] & ~ID_inst[25];
   assign inst_pcaddul2i = op_31_26_d[6'h07] & ~ID_inst[25];
 
+//aluop 译码：0 add, 1 sub, 2 slt, 3 sltu, 4 and, 5 nor, 6 or, 7 xor, 8 sll, 9 srl, 10 sra, 11 lui
+//12 mul, 13 mulh, 14 mulhu, 15 div, 16 divu, 17 mod, 18 modu
 
   assign ID_alu_op[ 0] = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                         | inst_jirl | inst_bl | inst_pcaddul2i;
@@ -283,11 +285,11 @@ module ID_stage (
 
   assign jirl_offs = {{14{i16[15]}}, i16[15:0], 2'b0};
 
-  assign src_reg_is_rd = inst_beq | inst_bne | inst_st_w;
+  assign src_reg_is_rd = inst_beq | inst_bne | inst_st_w;          // 源寄存器是否为rd
 
-  assign ID_src1_is_pc = inst_jirl | inst_bl | inst_pcaddul2i;
+  assign ID_src1_is_pc = inst_jirl | inst_bl | inst_pcaddul2i;    // 源寄存器1是否为PC
 
-  assign ID_src2_is_imm   = inst_slli_w |
+  assign ID_src2_is_imm   = inst_slli_w |   
                         inst_srli_w |
                         inst_srai_w |
                         inst_addi_w |
