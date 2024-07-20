@@ -43,6 +43,8 @@ module mycpu_top(
     wire [`IF_ID_LEN -1:0] IF_ID_bus;
     wire [`ID_EX_LEN -1:0] ID_EX_bus;
 
+    wire [4:0] EX_mem_ld_inst;
+
 
     IF_stage IF(
         .clk(clk),
@@ -90,6 +92,7 @@ module mycpu_top(
         .EX_rf_bus(EX_rf_bus),
         .EX_MEM_valid(EX_MEM_valid),
         .EX_pc(EX_pc),
+        .EX_mem_ld_inst(EX_mem_ld_inst),
         
         .data_sram_en(data_sram_en),
         .data_sram_we(data_sram_we),
@@ -105,6 +108,7 @@ module mycpu_top(
         .EX_rf_bus(EX_rf_bus),
         .EX_MEM_valid(EX_MEM_valid),
         .EX_pc(EX_pc),
+        .EX_mem_ld_inst(EX_mem_ld_inst),
 
         .WB_allowin(WB_allowin),
         .MEM_rf_bus(MEM_rf_bus),

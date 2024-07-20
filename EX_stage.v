@@ -12,6 +12,7 @@ module EX_stage (
     output wire [38:0] EX_rf_bus,       // {EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_alu_result}
     output wire        EX_MEM_valid,
     output reg  [31:0] EX_pc,
+    output reg  [ 4:0] EX_mem_ld_inst, //{inst_ld_w, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu}
     // data sram interface
     output wire        data_sram_en,
     output wire [ 3:0] data_sram_we,
@@ -29,10 +30,14 @@ module EX_stage (
   wire         alu_complete;
   reg  [ 31:0] EX_rkd_value;
   reg          EX_res_from_mem;
-  reg          EX_mem_we;
+  wire [ 3:0]  EX_mem_we;
   reg          EX_rf_we;
   reg  [4 : 0] EX_rf_waddr;
 
+  reg  [2:0] EX_mem_st_inst;
+  wire inst_st_w;
+  wire inst_st_h;
+  wire inst_st_b;
   //------------------------------state control signal---------------------------------------
 
   assign EX_ready_go  = alu_complete;
@@ -50,7 +55,8 @@ module EX_stage (
       EX_res_from_mem, 
       EX_alu_src1, 
       EX_alu_src2,
-      EX_mem_we, 
+      EX_mem_st_inst,
+      EX_mem_ld_inst, 
       EX_rf_we, 
       EX_rf_waddr, 
       EX_rkd_value, 
@@ -60,7 +66,8 @@ module EX_stage (
       EX_res_from_mem, 
       EX_alu_src1, 
       EX_alu_src2,
-      EX_mem_we, 
+      EX_mem_st_inst,
+      EX_mem_ld_inst, 
       EX_rf_we, 
       EX_rf_waddr, 
       EX_rkd_value, 
@@ -83,9 +90,20 @@ module EX_stage (
   assign EX_rf_bus = {EX_res_from_mem & EX_valid, EX_rf_we & EX_valid, EX_rf_waddr, EX_alu_result};
 
   //------------------------------data sram interface---------------------------------------
+  assign {inst_st_w, inst_st_h, inst_st_b} = EX_mem_st_inst;
+
+  assign EX_mem_we[0] = inst_st_w | inst_st_h & ~EX_alu_result[1] | inst_st_b & ~EX_alu_result[0] & ~EX_alu_result[1];
+  assign EX_mem_we[1] = inst_st_w | inst_st_h & ~EX_alu_result[1] | inst_st_b &  EX_alu_result[0] & ~EX_alu_result[1];
+  assign EX_mem_we[2] = inst_st_w | inst_st_h &  EX_alu_result[1] | inst_st_b & ~EX_alu_result[0] &  EX_alu_result[1];
+  assign EX_mem_we[3] = inst_st_w | inst_st_h &  EX_alu_result[1] | inst_st_b &  EX_alu_result[0] &  EX_alu_result[1];
+
   assign data_sram_en = (EX_res_from_mem || EX_mem_we) && EX_valid;
-  assign data_sram_we = {4{EX_mem_we & EX_valid}};
+  assign data_sram_we = {4{EX_valid}} & EX_mem_we;
   assign data_sram_addr = EX_alu_result;
-  assign data_sram_wdata = EX_rkd_value;
+  assign data_sram_wdata[ 7:0] = EX_rkd_value[ 7:0];
+  assign data_sram_wdata[15:8] = inst_st_b ? EX_rkd_value[ 7:0] : EX_rkd_value[15:8];
+  assign data_sram_wdata[23:16] = inst_st_w ? EX_rkd_value[ 23:16] : EX_rkd_value[7:0];
+  assign data_sram_wdata[31:24] = inst_st_w ? EX_rkd_value[ 31:24] : 
+                                  inst_st_h ? EX_rkd_value[15:8] : EX_rkd_value[7:0] ;
 
 endmodule
