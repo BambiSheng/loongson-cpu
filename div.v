@@ -1,77 +1,98 @@
 module Div(
-    input  wire    div_clk,
-    input  wire    resetn,
-    input  wire    div,
-    input  wire    div_signed,
-    input  wire [31:0] x,   //被除数
-    input  wire [31:0] y,   //除数
-    output wire [31:0] s,   //商
-    output wire [31:0] r,   //余数
-    output wire    complete //除法完成信号
-);
+    /*
+    32位除法器
+    
+    div_clk: 除法器的时钟信号
+    resetn: 除法器的复位信号(取反)
+    div: 除法器使能信号
+    div_signed: 除法器是否有符号
+    x: 被除数
+    y: 除数
+    s: 商
+    r: 余数
+    complete: 除法完成信号
+    */
+    input  wire        div_clk,
+    input  wire        resetn,
+    input  wire        div,
+    input  wire        div_signed,
+    input  wire [31:0] x,
+    input  wire [31:0] y,
+    output wire  [31:0] s,
+    output wire  [31:0] r,
+    output wire         complete
+  );
 
-    wire        sign_s;
-    wire        sign_r;
-    wire [31:0] abs_x;
-    wire [31:0] abs_y;
-    wire [32:0] pre_r;
-    wire [32:0] recover_r;
-    reg  [63:0] x_pad;
-    reg  [32:0] y_pad;
-    reg  [31:0] s_r;
-    reg  [32:0] r_r;    // 当前的余数
-    reg  [ 5:0] counter;
+  reg [5:0] count = 0;
+  wire sign_r;
+  wire sign_s;
+  wire [31:0] abs_x;
+  wire [31:0] abs_y;
 
-// 1.确定符号位
-    assign sign_s = (x[31]^y[31]) & div_signed;
-    assign sign_r = x[31] & div_signed;
-    assign abs_x  = (div_signed & x[31]) ? (~x+1'b1): x;
-    assign abs_y  = (div_signed & y[31]) ? (~y+1'b1): y;
-// 2.循环迭代得到商和余数绝对值
-    assign complete = counter == 6'd33;
-    //初始化计数器
-    always @(posedge div_clk) begin
-        if(~resetn) begin
-            counter <= 6'b0;
-        end
-        else if(div) begin
-            if(complete)
-                counter <= 6'b0;
-            else
-                counter <= counter + 1'b1;
-        end
-    end
-    //准备操作数,counter=0
-    always @(posedge div_clk) begin
-        if(~resetn)
-            {x_pad, y_pad} <= {64'b0, 33'b0};
-        else if(div) begin
-            if(~|counter)
-                {x_pad, y_pad} <= {32'b0, abs_x, 1'b0, abs_y};
-        end
-    end
+  reg [32:0] temp_x;
+  wire [32:0] temp_y;
+  reg [31:0] temp_s = 0;
+  wire [31:0] temp_r;
 
-    //求解当前迭代的减法结果
-    assign pre_r = r_r - y_pad;                     //未恢复余数的结果
-    assign recover_r = pre_r[32] ? r_r : pre_r;     //恢复余数的结果
-    always @(posedge div_clk) begin
-        if(~resetn) 
-            s_r <= 32'b0;
-        else if(div & ~complete & |counter) begin
-            s_r[32-counter] <= ~pre_r[32];
-        end
+  // 完成信号
+  assign complete = (count == 33);
+
+  // 1.根据被除数和除数确定商和余数的符号,并计算被除数和除数的绝对值
+  assign sign_r = x[31] & div_signed;
+  assign sign_s = (x[31] ^ y[31]) & div_signed;
+  assign abs_x = (div_signed & x[31]) ? (~x + 1'b1) : x;
+  assign abs_y = (div_signed & y[31]) ? (~y + 1'b1) : y;
+
+  // 2.迭代运算得到商和余数的绝对值
+
+  // 更新count, 初始化temp_y
+  assign temp_y = {1'b0, abs_y};
+  always @(posedge div_clk)
+  begin
+    if (!resetn)
+    begin
+      count <= 0;
     end
-    always @(posedge div_clk) begin
-        if(~resetn)
-            r_r <= 33'b0;
-        if(div & ~complete) begin
-            if(~|counter)   //余数初始化
-                r_r <= {32'b0, abs_x[31]};
-            else
-                r_r <=  (counter == 32) ? recover_r : {recover_r, x_pad[31 - counter]};
-        end
+    else if (div)
+    begin
+      if (complete)
+      begin
+        count <= 0;
+      end
+      else
+      begin
+        count <= count + 1;
+      end
     end
-// 3.调整最终商和余数
-    assign s = div_signed & sign_s ? (~s_r+1'b1) : s_r;
-    assign r = div_signed & sign_r ? (~r_r+1'b1) : r_r;
+  end
+
+  // 进行迭代
+  wire [32:0] temp_result;
+  assign temp_result = temp_x - temp_y;
+  always @(posedge div_clk)
+  if (!resetn)
+  begin
+    temp_s <= 0;
+    temp_x <= 0;
+  end
+  else if (div)
+  begin
+    if(count == 0)
+    begin
+      temp_x <= {32'b0, abs_x[31]};
+    end
+    else if(!complete)
+    begin
+      temp_x <= {(~temp_result[32]) ? temp_result: temp_x, abs_x[31-count]};
+      temp_s[32 - count] <= ~temp_result[32];
+    end
+  end
+
+  // 计算余数
+  assign temp_r = abs_x - temp_s * abs_y;
+
+  // 3. 调整最终的商和余数
+  assign s = div_signed & sign_s ? (~temp_s + 1'b1) : temp_s;
+  assign r = div_signed & sign_r ? (~temp_r + 1'b1) : temp_r;
+
 endmodule
