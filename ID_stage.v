@@ -30,7 +30,7 @@ module ID_stage (
   wire        ID_res_from_MEM;  // 是否需要从MEM阶段传回数据
   reg  [31:0] ID_pc;
   wire [31:0] ID_rkd_value;
-  wire        ID_mem_we;        // 是否写内存
+  wire [ 7:0] ID_mem_inst;      // 是否读/写内存
 
   wire        dst_is_r1;        // 目的寄存器是否为r1
   wire        gr_we;            // 是否写寄存器
@@ -99,6 +99,15 @@ module ID_stage (
   wire        inst_div_wu;
   wire        inst_mod_w;
   wire        inst_mod_wu;
+  //added in exp11
+  wire        inst_blt;
+  wire        inst_bge;
+  wire        inst_bltu;
+  wire        inst_bgeu;
+  wire        inst_ld_b;
+  wire        inst_ld_h;
+  wire        inst_ld_bu;
+  wire        inst_ld_hu;
 
   wire        need_ui5;         // 是否需要无符号立即数5位  
   wire        need_ui12;        // 是否需要无符号立即数12位
@@ -162,13 +171,20 @@ module ID_stage (
 
   //提前判断分支跳转条件
   assign rj_eq_rd = (rj_value == rkd_value);
+  assign rj_lt_rd = ($signed(rj_value) < $signed(rkd_value));
+  assign rj_lt_rd_u = ($unsigned(rj_value) < $unsigned(rkd_value));
   assign br_taken = (inst_beq  &&  rj_eq_rd
                     || inst_bne  && !rj_eq_rd
                     || inst_jirl
                     || inst_bl
                     || inst_b
+                    || inst_blt && rj_lt_rd
+                    || inst_bge && !rj_lt_rd
+                    || inst_bltu && rj_lt_rd_u
+                    || inst_bgeu && !rj_lt_rd_u
                     ) && ID_valid;    // 分支跳转条件
-  assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (ID_pc + br_offs) :(rj_value + jirl_offs);       // 分支目标地址
+  assign br_target = (inst_beq || inst_bne || inst_bl || inst_b || 
+                      inst_blt || inst_bge || inst_bltu || inst_bgeu ) ? (ID_pc + br_offs) :(rj_value + jirl_offs);       // 分支目标地址
   assign br_bus = {br_taken, br_target};
   //------------------------------decode instruction---------------------------------------
 
@@ -242,15 +258,27 @@ module ID_stage (
   assign inst_bne = op_31_26_d[6'h17];
   assign inst_lu12i_w = op_31_26_d[6'h05] & ~ID_inst[25];
   assign inst_pcaddul2i = op_31_26_d[6'h07] & ~ID_inst[25];
+  assign inst_blt = op_31_26_d[6'h18];
+  assign inst_bge = op_31_26_d[6'h19];
+  assign inst_bltu = op_31_26_d[6'h1a];
+  assign inst_bgeu = op_31_26_d[6'h1b];
+  assign inst_ld_b = op_31_26_d[6'h0a] & op_25_22_d[4'h0];
+  assign inst_ld_h = op_31_26_d[6'h0a] & op_25_22_d[4'h1];
+  assign inst_ld_bu = op_31_26_d[6'h0a] & op_25_22_d[4'h8];
+  assign inst_ld_hu = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
+  assign inst_st_b = op_31_26_d[6'h0a] & op_25_22_d[4'h4];
+  assign inst_st_h = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
+ 
 
 //aluop 译码：0 add, 1 sub, 2 slt, 3 sltu, 4 and, 5 nor, 6 or, 7 xor, 8 sll, 9 srl, 10 sra, 11 lui
 //12 mul, 13 mulh, 14 mulhu, 15 div, 16 divu, 17 mod, 18 modu
 
   assign ID_alu_op[ 0] = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
-                        | inst_jirl | inst_bl | inst_pcaddul2i;
+                        | inst_jirl | inst_bl | inst_pcaddul2i
+                        | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu | inst_st_b | inst_st_h;
   assign ID_alu_op[1] = inst_sub_w;
-  assign ID_alu_op[2] = inst_slt | inst_slti;
-  assign ID_alu_op[3] = inst_sltu | inst_sltui;
+  assign ID_alu_op[2] = inst_slt | inst_slti | inst_blt | inst_bge;
+  assign ID_alu_op[3] = inst_sltu | inst_sltui | inst_bltu | inst_bgeu;
   assign ID_alu_op[4] = inst_and | inst_andi;
   assign ID_alu_op[5] = inst_nor;
   assign ID_alu_op[6] = inst_or | inst_ori;
@@ -270,7 +298,8 @@ module ID_stage (
 
   assign need_ui5 = inst_slli_w | inst_srli_w | inst_srai_w;
   assign need_ui12 = inst_andi | inst_ori | inst_xori;
-  assign need_si12 = inst_addi_w | inst_ld_w | inst_st_w | inst_slti | inst_sltui;
+  assign need_si12 = inst_addi_w | inst_ld_w | inst_st_w | inst_slti | inst_sltui |
+                     inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu | inst_st_b | inst_st_h;
   assign need_si16 = inst_jirl | inst_beq | inst_bne;
   assign need_si20 = inst_lu12i_w | inst_pcaddul2i;
   assign need_si26 = inst_b | inst_bl;
@@ -285,7 +314,8 @@ module ID_stage (
 
   assign jirl_offs = {{14{i16[15]}}, i16[15:0], 2'b0};
 
-  assign src_reg_is_rd = inst_beq | inst_bne | inst_st_w;          // 源寄存器是否为rd
+  assign src_reg_is_rd = inst_beq | inst_bne | inst_st_w | inst_blt | inst_bge |
+                         inst_bltu| inst_bgeu| inst_st_b | inst_st_h;          // 源寄存器是否为rd
 
   assign ID_src1_is_pc = inst_jirl | inst_bl | inst_pcaddul2i;    // 源寄存器1是否为PC
 
@@ -303,16 +333,23 @@ module ID_stage (
                         inst_ori    |
                         inst_xori   |
                         inst_slti   |
-                        inst_sltui;
+                        inst_sltui  |
+                        inst_ld_b   |
+                        inst_ld_h   |
+                        inst_ld_bu  |
+                        inst_ld_hu  |
+                        inst_st_b   |
+                        inst_st_h;  // 源寄存器2是否为立即数
 
   assign ID_alu_src1 = ID_src1_is_pc ? ID_pc[31:0] : rj_value;
   assign ID_alu_src2 = ID_src2_is_imm ? imm : rkd_value;
 
   assign ID_rkd_value = rkd_value;
-  assign ID_res_from_MEM = inst_ld_w;
+  assign ID_res_from_MEM = inst_ld_w | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
   assign dst_is_r1 = inst_bl;
-  assign gr_we = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b;
-  assign ID_mem_we = inst_st_w;
+  assign gr_we = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge &
+                 ~inst_bltu & ~inst_bgeu& ~inst_st_b & ~inst_st_h;  // 是否写寄存器
+  assign ID_mem_inst = {inst_st_w, inst_st_h, inst_st_b, inst_ld_w, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu};
   assign dest = dst_is_r1 ? 5'd1 : rd;
 
   //------------------------------regfile control---------------------------------------
@@ -360,7 +397,7 @@ module ID_stage (
     ID_res_from_MEM,  //1  bit
     ID_alu_src1,  //32 bit
     ID_alu_src2,  //32 bit
-    ID_mem_we,  //1  bit
+    ID_mem_inst,  //8  bit
     ID_rf_we,  //1  bit
     ID_rf_waddr,  //5  bit
     ID_rkd_value,  //32 bit
