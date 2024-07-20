@@ -1,5 +1,20 @@
 `include "mycpu.h"
 module IF_stage (
+    /*
+  IF_stage模块
+
+  clk: 时钟
+  resetn: 复位信号
+  ID_allowin: 允许ID_stage接收数据
+  br_bus: 分支总线
+  IF_ID_valid: IF_ID是否有效
+  IF_ID_bus: IF_ID总线
+  inst_sram_en: 指令存储器使能
+  inst_sram_we: 指令存储器写使能
+  inst_sram_addr: 指令存储器地址
+  inst_sram_wdata: 指令存储器写数据
+  inst_sram_rdata: 指令存储器读数据
+  */
     input  wire                   clk,
     input  wire                   resetn,
     // ID to ID interface

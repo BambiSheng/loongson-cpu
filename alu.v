@@ -1,4 +1,15 @@
 module alu(
+  /*
+  32位alu模块
+
+  clk: 时钟
+  resetn: 复位信号
+  alu_op: 操作码
+  alu_src1: 源操作数1
+  alu_src2: 源操作数2
+  alu_result: 结果
+  complete: 计算完成信号
+  */
   input  wire        clk,
   input  wire        resetn,
   // input  wire [11:0] alu_op,
@@ -9,19 +20,18 @@ module alu(
   output wire        complete
 );
 
-wire op_add;   //add operation
-wire op_sub;   //sub operation
-wire op_slt;   //signed compared and set less than
-wire op_sltu;  //unsigned compared and set less than
-wire op_and;   //bitwise and
-wire op_nor;   //bitwise nor
-wire op_or;    //bitwise or
-wire op_xor;   //bitwise xor
-wire op_sll;   //logic left shift
-wire op_srl;   //logic right shift
-wire op_sra;   //arithmetic right shift
-wire op_lui;   //Load Upper Immediate
-
+wire op_add;  
+wire op_sub; 
+wire op_slt;   
+wire op_sltu; 
+wire op_and; 
+wire op_nor; 
+wire op_or;   
+wire op_xor;  
+wire op_sll;  
+wire op_srl;  
+wire op_sra;  
+wire op_lui;   
 wire op_mul;
 wire op_mulh;
 wire op_mulhu;
@@ -30,20 +40,18 @@ wire op_divu;
 wire op_mod;
 wire op_modu;
 
-// control code decomposition
-assign op_add  = alu_op[ 0];
-assign op_sub  = alu_op[ 1];
-assign op_slt  = alu_op[ 2];
-assign op_sltu = alu_op[ 3];
-assign op_and  = alu_op[ 4];
-assign op_nor  = alu_op[ 5];
-assign op_or   = alu_op[ 6];
-assign op_xor  = alu_op[ 7];
-assign op_sll  = alu_op[ 8];
-assign op_srl  = alu_op[ 9];
+assign op_add  = alu_op[0];
+assign op_sub  = alu_op[1];
+assign op_slt  = alu_op[2];
+assign op_sltu = alu_op[3];
+assign op_and  = alu_op[4];
+assign op_nor  = alu_op[5];
+assign op_or   = alu_op[6];
+assign op_xor  = alu_op[7];
+assign op_sll  = alu_op[8];
+assign op_srl  = alu_op[9];
 assign op_sra  = alu_op[10];
 assign op_lui  = alu_op[11];
-
 assign op_mul  = alu_op[12];
 assign op_mulh = alu_op[13];
 assign op_mulhu= alu_op[14];
@@ -67,26 +75,15 @@ wire [31:0] mod_result;
 wire [31:0] div_result;
 wire [63:0] mul_result;
 
-// 32-bit adder
+//加法器
 wire [31:0] adder_a;
 wire [31:0] adder_b;
 wire        adder_cin;
 wire [31:0] adder_result;
 wire        adder_cout;
-
+// 除法器
 wire        div_en;
 wire        div_complete;
-wire        mul_en;
-reg         mul_complete;
-
-always @(posedge clk) begin
-  if(~resetn)
-    mul_complete <= 1'b0;
-  else if(mul_en & ~mul_complete)
-    mul_complete <= 1'b1;
-  else
-    mul_complete <= 1'b0;
-end
 
 assign adder_a   = alu_src1;
 assign adder_b   = (op_sub | op_slt | op_sltu) ? ~alu_src2 : alu_src2;  //src1 - src2 rj-rk
@@ -97,7 +94,7 @@ assign {adder_cout, adder_result} = adder_a + adder_b + adder_cin;
 assign add_sub_result = adder_result;
 
 // SLT result
-assign slt_result[31:1] = 31'b0;   //rj < rk 1
+assign slt_result[31:1] = 31'b0;  
 assign slt_result[0]    = (alu_src1[31] & ~alu_src2[31])
                         | ((alu_src1[31] ~^ alu_src2[31]) & adder_result[31]);
 
@@ -113,15 +110,15 @@ assign xor_result = alu_src1 ^ alu_src2;
 assign lui_result = alu_src2;
 
 // SLL result
-// assign sll_result = alu_src2 << alu_src1[4:0];   //rj << i5
-assign sll_result = alu_src1 << alu_src2[4:0];   //rj << i5
+assign sll_result = alu_src1 << alu_src2[4:0];  
 
 
 // SRL, SRA result
-assign sr64_result = {{32{op_sra & alu_src1[31]}}, alu_src1[31:0]} >> alu_src2[4:0]; //rj >> i5
-
+assign sr64_result = {{32{op_sra & alu_src1[31]}}, alu_src1[31:0]} >> alu_src2[4:0]; 
 assign sr_result   = sr64_result[31:0];
 
+// Mul, Div, Mod
+assign div_en = op_mod | op_modu | op_div | op_divu;
 Wallace_Mul u_mul(
     .mul_clk(clk),
     .resetn(resetn),
@@ -131,8 +128,7 @@ Wallace_Mul u_mul(
     .result(mul_result)
 );
 
-assign mul_en = op_mul | op_mulh | op_mulhu;
-assign div_en = op_mod | op_modu | op_div | op_divu;
+
 Div u_div(
     .div_clk(clk),
     .resetn(resetn),
@@ -161,5 +157,5 @@ assign alu_result = ({32{op_add|op_sub}} & add_sub_result)
                   | ({32{op_mul       }} & mul_result[31:0])
                   | ({32{op_mulh|op_mulhu}} & mul_result[63:32]);
 
-assign complete = ~resetn | div_complete & div_en | mul_complete & mul_en | ~div_en & ~mul_en;
+assign complete = ~resetn | div_complete & div_en | ~div_en;
 endmodule

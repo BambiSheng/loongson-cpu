@@ -27,8 +27,17 @@ module booth (
     
 endmodule
 
-// 华莱士树乘法器 result = x * y
 module Wallace_Mul (
+    /*
+    华莱士树乘法器 result = x * y
+    
+    mul_clk: 乘法器时钟
+    resetn: 复位信号
+    mul_signed: 乘法器是否有符号
+    x: 乘法器输入x
+    y: 乘法器输入y
+    result: 乘法器输出
+    */
     input           mul_clk,
     input           resetn,
     input           mul_signed,
@@ -37,11 +46,6 @@ module Wallace_Mul (
     output  [63:0]  result
 );
 
-    // wire    [32:0]  flag_x_bu;
-    // wire    [32:0]  flag_2x_bu;
-    // wire    [32:0]  flag_neg_x_bu;
-    // wire    [32:0]  flag_neg_2x_bu;
-    // wire    [32:0]  flag_zero;
     wire    [63:0]  _x_bu;
     wire    [63:0]  _2x_bu;
     wire    [63:0]  _neg_x_bu;
@@ -58,12 +62,6 @@ module Wallace_Mul (
     assign y_signed = {{2{y[31] & mul_signed}}, y};
     assign y_left = {1'b0, y_signed[33:1]};
     assign y_right = {y_signed[32:0], 1'b0};
-
-    // assign flag_x_bu        = (~y_left & ~y_signed & y_right) | (~y_left & y_signed& ~y_right);         // 001, 010
-    // assign flag_2x_bu       = (~y_left & y_signed & y_right);                                           // 011
-    // assign flag_neg_2x_bu   = (y_left & ~y_signed & ~y_right) ;                                         // 100
-    // assign flag_neg_x_bu    = (y_left & ~y_signed & y_right) | (y_left &  y_signed & ~y_right);         // 101, 110
-    // assign flag_zero        = (y_left & y_signed & y_right) | (~y_left & ~y_signed & ~y_right);         // 000, 111
 
     assign _x_bu        = {{32{x[31] & mul_signed}}, x};
     assign _2x_bu       = {_x_bu, 1'b0};

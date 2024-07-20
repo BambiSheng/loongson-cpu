@@ -1,17 +1,31 @@
 module ID_stage (
+    /*
+  ID_stage模块
+
+  clk: 时钟
+  resetn: 复位信号
+  IF_ID_valid: IF_ID是否有效
+  ID_allowin: 允许ID_stage接收数据
+  br_bus: 分支总线
+  IF_ID_bus: IF_ID总线
+  EX_allowin: 允许EX_stage接收数据
+  ID_EX_valid: ID_EX是否有效
+  ID_EX_bus: ID_EX总线
+  
+  WB_rf_bus: WB数据转发总线
+  MEM_rf_bus: MEM数据转发总线
+  EX_rf_bus: EX数据转发总线
+  */
     input  wire                   clk,
     input  wire                   resetn,
-    // IF and ID interface
     input  wire                   IF_ID_valid,
     output wire                   ID_allowin,
     output wire [           32:0] br_bus,
     input  wire [`IF_ID_LEN -1:0] IF_ID_bus,
-    // ID and EX interface
     input  wire                   EX_allowin,
     output wire                   ID_EX_valid,
     output wire [`ID_EX_LEN -1:0] ID_EX_bus,
 
-    // hazard detection and forwarding
     input wire [37:0] WB_rf_bus,   // {WB_rf_we, WB_rf_waddr, WB_rf_wdata}
     input wire [37:0] MEM_rf_bus,  // {MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata}
     input wire [38:0] EX_rf_bus    // {EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_alu_result}
@@ -25,26 +39,26 @@ module ID_stage (
   wire [18:0] ID_alu_op;
   wire [31:0] ID_alu_src1;
   wire [31:0] ID_alu_src2;
-  wire        ID_src1_is_pc;  
+  wire        ID_src1_is_pc;
   wire        ID_src2_is_imm;
   wire        ID_res_from_MEM;  // 是否需要从MEM阶段传回数据
   reg  [31:0] ID_pc;
   wire [31:0] ID_rkd_value;
-  wire [ 7:0] ID_mem_inst;      // 是否读/写内存
+  wire [ 7:0] ID_mem_inst;  // 是否读/写内存
 
-  wire        dst_is_r1;        // 目的寄存器是否为r1
-  wire        gr_we;            // 是否写寄存器
-  wire        src_reg_is_rd;    // 源寄存器是否为rd
-  wire        rj_eq_rd;         // rj是否等于rd
+  wire        dst_is_r1;  // 目的寄存器是否为r1
+  wire        gr_we;  // 是否写寄存器
+  wire        src_reg_is_rd;  // 源寄存器是否为rd
+  wire        rj_eq_rd;  // rj是否等于rd
   wire [ 4:0] dest;
   wire [31:0] rj_value;
   wire [31:0] rkd_value;
   wire [31:0] imm;
 
-  wire [31:0] br_offs;        // 分支偏移量
-  wire [31:0] jirl_offs;      // 跳转偏移量
-  wire        br_taken;       // 是否分支跳转
-  wire [31:0] br_target;      // 分支目标地址
+  wire [31:0] br_offs;  // 分支偏移量
+  wire [31:0] jirl_offs;  // 跳转偏移量
+  wire        br_taken;  // 是否分支跳转
+  wire [31:0] br_target;  // 分支目标地址
 
   wire [ 5:0] op_31_26;
   wire [ 3:0] op_25_22;
@@ -109,13 +123,13 @@ module ID_stage (
   wire        inst_ld_bu;
   wire        inst_ld_hu;
 
-  wire        need_ui5;         // 是否需要无符号立即数5位  
-  wire        need_ui12;        // 是否需要无符号立即数12位
-  wire        need_si12;        // 是否需要有符号立即数12位
-  wire        need_si16;        // 是否需要有符号立即数16位
-  wire        need_si20;        // 是否需要有符号立即数20位
-  wire        need_si26;        // 是否需要有符号立即数26位
-  wire        src2_is_4;        // PC+4
+  wire        need_ui5;  // 是否需要无符号立即数5位  
+  wire        need_ui12;  // 是否需要无符号立即数12位
+  wire        need_si12;  // 是否需要有符号立即数12位
+  wire        need_si16;  // 是否需要有符号立即数16位
+  wire        need_si20;  // 是否需要有符号立即数20位
+  wire        need_si26;  // 是否需要有符号立即数26位
+  wire        src2_is_4;  // PC+4
 
 
   wire [ 4:0] rf_raddr1;
@@ -123,14 +137,14 @@ module ID_stage (
   wire [ 4:0] rf_raddr2;
   wire [31:0] rf_rdata2;
 
-  wire        hazard_r1_wb;       // 写回数据r1冲突
-  wire        hazard_r2_wb;       // 写回数据r2冲突
-  wire        hazard_r1_mem;      // 访存数据r1冲突 
-  wire        hazard_r2_mem;      // 访存数据r2冲突
-  wire        hazard_r1_ex;       // 执行数据r1冲突
-  wire        hazard_r2_ex;       // 执行数据r2冲突
-  wire        need_r1;            // 是否需要读取r1
-  wire        need_r2;            // 是否需要读取r2
+  wire        hazard_r1_wb;  // 写回数据r1冲突
+  wire        hazard_r2_wb;  // 写回数据r2冲突
+  wire        hazard_r1_mem;  // 访存数据r1冲突 
+  wire        hazard_r2_mem;  // 访存数据r2冲突
+  wire        hazard_r1_ex;  // 执行数据r1冲突
+  wire        hazard_r2_ex;  // 执行数据r2冲突
+  wire        need_r1;  // 是否需要读取r1
+  wire        need_r2;  // 是否需要读取r2
 
   //传回信号定义
   wire        WB_rf_we;
@@ -151,7 +165,7 @@ module ID_stage (
 
   //------------------------------state control signal---------------------------------------
   assign ID_ready_go = ~ID_stall;
-  assign ID_allowin  = ~ID_valid | ID_ready_go & EX_allowin;
+  assign ID_allowin = ~ID_valid | ID_ready_go & EX_allowin;
   assign ID_stall    = EX_res_from_mem & (hazard_r1_ex & need_r1 | hazard_r2_ex & need_r2);   // load-use冲突
   assign ID_EX_valid = ID_valid & ID_ready_go;
   always @(posedge clk) begin
@@ -268,10 +282,10 @@ module ID_stage (
   assign inst_ld_hu = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
   assign inst_st_b = op_31_26_d[6'h0a] & op_25_22_d[4'h4];
   assign inst_st_h = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
- 
 
-//aluop 译码：0 add, 1 sub, 2 slt, 3 sltu, 4 and, 5 nor, 6 or, 7 xor, 8 sll, 9 srl, 10 sra, 11 lui
-//12 mul, 13 mulh, 14 mulhu, 15 div, 16 divu, 17 mod, 18 modu
+
+  //aluop 译码：0 add, 1 sub, 2 slt, 3 sltu, 4 and, 5 nor, 6 or, 7 xor, 8 sll, 9 srl, 10 sra, 11 lui
+  //12 mul, 13 mulh, 14 mulhu, 15 div, 16 divu, 17 mod, 18 modu
 
   assign ID_alu_op[ 0] = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                         | inst_jirl | inst_bl | inst_pcaddul2i
@@ -317,7 +331,7 @@ module ID_stage (
   assign src_reg_is_rd = inst_beq | inst_bne | inst_st_w | inst_blt | inst_bge |
                          inst_bltu| inst_bgeu| inst_st_b | inst_st_h;          // 源寄存器是否为rd
 
-  assign ID_src1_is_pc = inst_jirl | inst_bl | inst_pcaddul2i;    // 源寄存器1是否为PC
+  assign ID_src1_is_pc = inst_jirl | inst_bl | inst_pcaddul2i;  // 源寄存器1是否为PC
 
   assign ID_src2_is_imm   = inst_slli_w |   
                         inst_srli_w |
@@ -349,7 +363,9 @@ module ID_stage (
   assign dst_is_r1 = inst_bl;
   assign gr_we = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge &
                  ~inst_bltu & ~inst_bgeu& ~inst_st_b & ~inst_st_h;  // 是否写寄存器
-  assign ID_mem_inst = {inst_st_w, inst_st_h, inst_st_b, inst_ld_w, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu};
+  assign ID_mem_inst = {
+    inst_st_w, inst_st_h, inst_st_b, inst_ld_w, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu
+  };
   assign dest = dst_is_r1 ? 5'd1 : rd;
 
   //------------------------------regfile control---------------------------------------
@@ -391,7 +407,7 @@ module ID_stage (
                         hazard_r2_mem ? MEM_rf_wdata:
                         hazard_r2_wb  ? WB_rf_wdata : rf_rdata2;
 
-  //------------------------------ds to es interface--------------------------------------
+  //------------------------------ID_EX bus---------------------------------------
   assign ID_EX_bus = {
     ID_alu_op,  //19 bit
     ID_res_from_MEM,  //1  bit
