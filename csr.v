@@ -18,6 +18,7 @@ module csr(
     EXC_esubcode: 异常子代码
     EXC_pc: 异常地址
     CSR_2_IF_pc: csr到IF_stage的pc
+    INT_signal: 中断信号
     */
     input  wire        clk,
     input  wire        resetn,
@@ -35,7 +36,8 @@ module csr(
     input wire [5:0] EXC_ecode,
     input wire [8:0] EXC_esubcode,
     input wire [31:0] EXC_pc,
-    output wire [31:0] CSR_2_IF_pc
+    output wire [31:0] CSR_2_IF_pc,
+    output wire INT_signal
   );
 
   //-------------------------csr寄存器-------------------------------
@@ -74,25 +76,45 @@ module csr(
   reg [25:0] eentry_VA;
   assign eentry = {eentry_VA, 6'b0};
 
-
-
   // SAVE0-3
   reg [31:0] save0;
   reg [31:0] save1;
   reg [31:0] save2;
   reg [31:0] save3;
 
-  always@(posedge clk)
-  begin
-    if(~resetn)
-    begin
-    end
-    else if(we)
-    begin
+  // ECFG
+  wire [31:0] ecfg;
+  reg [9:0] efcg_LIE_9_0;
+  reg [1:0] efcg_LIE_12_11;
+  assign ecfg = {19'b0, efcg_LIE_12_11, 1'b0, efcg_LIE_9_0};
 
-    end
-  end
+  // BADV
+  reg [31:0] badv;
 
+  // TID
+  reg [31:0] tid;
+
+  // TCFG: set n = 32
+  wire [31:0] tcfg;
+  reg tcfg_En;
+  reg tcfg_Periodic;
+  reg [29:0] tcfg_InitVal;
+  assign tcfg = {tcfg_InitVal, tcfg_Periodic, tcfg_En};
+
+  // TVAL
+  reg [31:0] tval;
+
+  // TICLR
+  wire [31:0] ticlr;
+  assign ticlr = 32'b0;
+
+  //-------------------------中断信号-------------------------------
+  wire [7:0] HW_int;
+  wire TI_int;
+  wire IPI_int;
+  assign HW_int = 8'b0;
+  assign IPI_int = 1'b0;
+  assign INT_signal = (ecfg[12:0] & estat[12:0]) && crmd_IE;
 
 
   //-------------------------csr读取-------------------------------
@@ -105,13 +127,19 @@ module csr(
          (csr_num == `SAVE1) ? save1 :
          (csr_num == `SAVE2) ? save2 :
          (csr_num == `SAVE3) ? save3 :
+         (csr_num == `ECFG) ? ecfg :
+         (csr_num == `BADV) ? badv :
+         (csr_num == `TID) ? tid :
+         (csr_num == `TCFG) ? tcfg :
+         (csr_num == `TVAL) ? tval :
+         (csr_num == `TICLR) ? ticlr :
          32'b0;
 
   //------------------------csr to IF_stage------------------------
-    assign CSR_2_IF_pc = EXC_signal ? eentry : 
-                        ERTN_signal ? era :
-                        32'b0;
-    
+  assign CSR_2_IF_pc = EXC_signal ? eentry :
+         ERTN_signal ? era :
+         32'b0;
+
   //-------------------寄存器时序电路---------------------------
 
   // CRMD
@@ -152,6 +180,7 @@ module csr(
       crmd_DATF <= wmask[6:5] & wdata[6:5] | ~wmask[6:5] & crmd_DATF;
       crmd_DATM <= wmask[8:7] & wdata[8:7] | ~wmask[8:7] & crmd_DATM;
     end
+
   end
 
   // PRMD
@@ -186,51 +215,73 @@ module csr(
     begin
       estat_IS_1_0 <= wmask[1:0] & wdata[1:0] | ~wmask[1:0] & estat_IS_1_0;
     end
+    else if(we && (csr_num == `TICLR))
+    begin
+      estat_IS_11 <= 1'b0;
+    end
+    estat_IS_9_2 <= HW_int;
+    estat_IS_12 <= IPI_int;
   end
 
   // ERA
-    always@(posedge clk)
+  always@(posedge clk)
+  begin
+    if(EXC_signal)
     begin
-        if(EXC_signal)
-        begin
-            era <= EXC_pc;
-        end
-        else if(we && (csr_num == `ERA))
-        begin
-            era <= wmask & wdata | ~wmask & era;
-        end
+      era <= EXC_pc;
     end
+    else if(we && (csr_num == `ERA))
+    begin
+      era <= wmask & wdata | ~wmask & era;
+    end
+  end
 
 
   // EENTRY
-    always@(posedge clk)
+  always@(posedge clk)
+  begin
+    if(we && (csr_num == `EENTRY))
     begin
-        if(we && (csr_num == `EENTRY))
-        begin
-            eentry_VA <= wmask[31:6] & wdata[31:6] | ~wmask[31:6] & eentry_VA;
-        end
+      eentry_VA <= wmask[31:6] & wdata[31:6] | ~wmask[31:6] & eentry_VA;
     end
+  end
 
 
   // SAVE0-3
-    always@(posedge clk)
+  always@(posedge clk)
+  begin
+    if(we && (csr_num == `SAVE0))
     begin
-        if(we && (csr_num == `SAVE0))
-        begin
-            save0 <= wmask & wdata | ~wmask & save0;
-        end
-        else if(we && (csr_num == `SAVE1))
-        begin
-            save1 <= wmask & wdata | ~wmask & save1;
-        end
-        else if(we && (csr_num == `SAVE2))
-        begin
-            save2 <= wmask & wdata | ~wmask & save2;
-        end
-        else if(we && (csr_num == `SAVE3))
-        begin
-            save3 <= wmask & wdata | ~wmask & save3;
-        end
+      save0 <= wmask & wdata | ~wmask & save0;
     end
+    else if(we && (csr_num == `SAVE1))
+    begin
+      save1 <= wmask & wdata | ~wmask & save1;
+    end
+    else if(we && (csr_num == `SAVE2))
+    begin
+      save2 <= wmask & wdata | ~wmask & save2;
+    end
+    else if(we && (csr_num == `SAVE3))
+    begin
+      save3 <= wmask & wdata | ~wmask & save3;
+    end
+  end
+  // ECFG
+  always@(posedge clk)
+  begin
+    if(~resetn)
+    begin
+      efcg_LIE_9_0 <= 10'b0;
+      efcg_LIE_12_11 <= 2'b0;
+    end
+    else if(we && (csr_num == `ECFG))
+    begin
+      efcg_LIE_9_0 <= wmask[9:0] & wdata[9:0] | ~wmask[9:0] & efcg_LIE_9_0;
+      efcg_LIE_12_11 <= wmask[12:11] & wdata[12:11] | ~wmask[12:11] & efcg_LIE_12_11;
+    end
+  end
+
+
 
 endmodule

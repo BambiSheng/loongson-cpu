@@ -15,7 +15,12 @@
     `define SAVE1  14'h31
     `define SAVE2  14'h32
     `define SAVE3  14'h33
+    `define TICLR  14'h44
+    `define ECFG  14'h4
+    `define BADV  14'h7
+    `define TID  14'h40
+    `define TCFG  14'h41
+    `define TVAL  14'h42
 
-
-
+    
 `endif
