@@ -22,5 +22,7 @@
     `define TCFG  14'h41
     `define TVAL  14'h42
 
+    `define TCFG_N 32
+
     
 `endif

@@ -17,6 +17,8 @@ module csr(
     EXC_ecode: 异常代码
     EXC_esubcode: 异常子代码
     EXC_pc: 异常地址
+    EXC_vaddr: 异常访存地址
+
     CSR_2_IF_pc: csr到IF_stage的pc
     INT_signal: 中断信号
     */
@@ -36,10 +38,11 @@ module csr(
     input wire [5:0] EXC_ecode,
     input wire [8:0] EXC_esubcode,
     input wire [31:0] EXC_pc,
+    input wire [31:0] EXC_vaddr,
+
     output wire [31:0] CSR_2_IF_pc,
     output wire INT_signal
   );
-
   //-------------------------csr寄存器-------------------------------
   // CRMD
   wire [31:0] crmd;
@@ -60,11 +63,10 @@ module csr(
 
   // ESTAT
   wire [31:0] estat;
-  reg [1:0] estat_IS_1_0=0;
-  reg [7:0] estat_IS_9_2=0; // R
-  reg estat_IS_11=0;     // R
-  reg estat_IS_12=0;   // R
-  //————————————————————————————————————————————临时修改——————————————————————————————————————————————
+  reg [1:0] estat_IS_1_0;
+  reg [7:0] estat_IS_9_2; // R
+  reg estat_IS_11;     // R
+  reg estat_IS_12;   // R
   reg [5:0] estat_Ecode; // R
   reg [8:0] estat_EsubCode; // R
   assign estat = {1'b0, estat_EsubCode, estat_Ecode, 3'b0, estat_IS_12, estat_IS_11, 1'b0, estat_IS_9_2, estat_IS_1_0};
@@ -99,11 +101,11 @@ module csr(
   wire [31:0] tcfg;
   reg tcfg_En;
   reg tcfg_Periodic;
-  reg [29:0] tcfg_InitVal;
+  reg [`TCFG_N - 3:0] tcfg_InitVal;
   assign tcfg = {tcfg_InitVal, tcfg_Periodic, tcfg_En};
 
   // TVAL
-  reg [31:0] tval;
+  reg [`TCFG_N - 1:0] tval;
 
   // TICLR
   wire [31:0] ticlr;
@@ -207,19 +209,27 @@ module csr(
     begin
       estat_IS_1_0 <= 2'b0;
     end
-    else if(EXC_signal)
-    begin
-      estat_Ecode <= EXC_ecode;
-      estat_EsubCode <= EXC_esubcode;
-    end
     else if(we && (csr_num == `ESTAT))
     begin
       estat_IS_1_0 <= wmask[1:0] & wdata[1:0] | ~wmask[1:0] & estat_IS_1_0;
     end
-    else if(we && (csr_num == `TICLR))
+
+    if(EXC_signal)
     begin
-      estat_IS_11 <= 1'b0;
+      estat_Ecode <= EXC_ecode;
+      estat_EsubCode <= EXC_esubcode;
     end
+
+    // 处理定时器中断
+    if(tval == 0)
+    begin
+      estat_IS_11 <= 1'b1;
+    end
+    else if(we && (csr_num == `TICLR) && wmask[0] && wdata[0])
+    begin
+      estat_IS_11 <= 1'b0; // 清除定时器中断
+    end
+
     estat_IS_9_2 <= HW_int;
     estat_IS_12 <= IPI_int;
   end
@@ -283,6 +293,74 @@ module csr(
     end
   end
 
+  // BADV
+  always@(posedge clk)
+  begin
+    if(EXC_signal && EXC_ecode == 8'h09)
+    begin
+      badv <= EXC_vaddr;
+    end
+    else if (EXC_signal && EXC_ecode == 8'h08)
+    begin
+      badv <= (EXC_esubcode == 9'h00) ? EXC_pc : EXC_vaddr;
+    end
+    else if(we && (csr_num == `BADV))
+    begin
+      badv <= wmask & wdata | ~wmask & badv;
+    end
+  end
 
+  // TID
+  always@(posedge clk)
+  begin
+    if(we && (csr_num == `TID))
+    begin
+      tid <= wmask & wdata | ~wmask & tid;
+    end
+  end
+
+  // TCFG
+  always@(posedge clk)
+  begin
+    if(~resetn)
+    begin
+      tcfg_En <= 1'b0;
+    end
+    else if(we && (csr_num == `TCFG))
+    begin
+      tcfg_En <= wmask[0] & wdata[0] | ~wmask[0] & tcfg_En;
+      tcfg_Periodic <= wmask[1] & wdata[1] | ~wmask[1] & tcfg_Periodic;
+      tcfg_InitVal <= wmask[`TCFG_N-1:2] & wdata[`TCFG_N-1:2] | ~wmask[`TCFG_N-1:2] & tcfg_InitVal;
+    end
+  end
+
+  // TVAL
+  parameter TVAL_MAX = 32'hfffffff >> (32 - `TCFG_N);
+  always@(posedge clk)
+  begin
+    if(~resetn)
+    begin
+      tval <= TVAL_MAX;
+    end
+    else if(we && (csr_num == `TCFG) && wmask[0] && wdata[0]) // 定时器使能
+    begin
+      tval <= {wmask[`TCFG_N-1:2] & wdata[`TCFG_N-1:2] | ~wmask[`TCFG_N-1:2] & tcfg_InitVal, 2'b0};
+    end
+    else if(tval != TVAL_MAX && tcfg_En)
+    begin
+      if(tval != 0)
+      begin
+        tval <= tval - 1;
+      end
+      else if(tcfg_Periodic)
+      begin
+        tval <= {tcfg_InitVal, 2'b0};
+      end
+      else
+      begin
+        tval <= TVAL_MAX;
+      end
+    end
+  end
 
 endmodule
