@@ -2,7 +2,7 @@
     `define mycpu
 
     `define IF_ID_LEN 64
-    `define ID_EX_LEN 162
+    `define ID_EX_LEN 162+1
 
 
     `define CRMD 14'h0

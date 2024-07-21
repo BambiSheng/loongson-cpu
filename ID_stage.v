@@ -25,10 +25,12 @@ module ID_stage (
     input  wire                   EX_allowin,
     output wire                   ID_EX_valid,
     output wire [`ID_EX_LEN -1:0] ID_EX_bus,
+    output wire [81:0] ID_except_bus,
+    input wire [37:0] WB_rf_bus,   // {WB_rf_we,WB_rf_we, WB_rf_waddr, WB_rf_wdata}
+    input wire [38:0] MEM_rf_bus,  // {MEM_csr_re,MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata}
+    input wire [39:0] EX_rf_bus,    // {EX_csr_re,EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_alu_result}
 
-    input wire [37:0] WB_rf_bus,   // {WB_rf_we, WB_rf_waddr, WB_rf_wdata}
-    input wire [37:0] MEM_rf_bus,  // {MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata}
-    input wire [38:0] EX_rf_bus    // {EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_alu_result}
+    input wire WB_EXC_signal
 );
 
   wire        ID_ready_go;
@@ -122,6 +124,13 @@ module ID_stage (
   wire        inst_ld_h;
   wire        inst_ld_bu;
   wire        inst_ld_hu;
+  //added in exp12
+  wire        inst_csrrd;
+  wire        inst_csrwr;
+  wire        inst_csrxchg;
+  wire        inst_ertn;
+  wire        inst_syscall;
+
 
   wire        need_ui5;  // 是否需要无符号立即数5位  
   wire        need_ui12;  // 是否需要无符号立即数12位
@@ -154,22 +163,33 @@ module ID_stage (
   wire        MEM_rf_we;
   wire [ 4:0] MEM_rf_waddr;
   wire [31:0] MEM_rf_wdata;
+  wire        MEM_csr_re  ;
 
   wire        EX_rf_we;
   wire [ 4:0] EX_rf_waddr;
   wire [31:0] EX_rf_wdata;
   wire        EX_res_from_mem;
+  wire        EX_csr_re  ;
 
   wire        ID_rf_we;
   wire [ 4:0] ID_rf_waddr;
 
+  wire        ID_csr_re;
+  wire [13:0] ID_csr_num;
+  wire        ID_csr_we;
+  wire [31:0] ID_csr_wmask;
+  wire [31:0] ID_csr_wvalue;
+  wire [ 6:0] ID_rf_bus;
+  wire [81:0] ID_except_bus; 
+
   //------------------------------state control signal---------------------------------------
   assign ID_ready_go = ~ID_stall;
   assign ID_allowin = ~ID_valid | ID_ready_go & EX_allowin;
-  assign ID_stall    = EX_res_from_mem & (hazard_r1_ex & need_r1 | hazard_r2_ex & need_r2);   // load-use冲突
+  assign ID_stall    = (EX_res_from_mem | EX_csr_re) & (hazard_r1_ex & need_r1 | hazard_r2_ex & need_r2) | MEM_csr_re & (hazard_r1_mem | hazard_r2_mem);   // load-use冲突
   assign ID_EX_valid = ID_valid & ID_ready_go;
   always @(posedge clk) begin
     if (~resetn) ID_valid <= 1'b0;
+    else if (WB_EXC_signal) ID_valid <= 1'b0;
     else if (br_taken) ID_valid <= 1'b0;
     else if (ID_allowin) ID_valid <= IF_ID_valid;
   end
@@ -283,6 +303,17 @@ module ID_stage (
   assign inst_st_b = op_31_26_d[6'h0a] & op_25_22_d[4'h4];
   assign inst_st_h = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
 
+  //add in exp12
+  assign inst_syscall = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h16];
+  assign inst_csrrd = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h00);
+  assign inst_csrwr = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h01);
+  assign inst_csrxchg = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & ~inst_csrrd & ~inst_csrwr;
+
+  assign inst_ertn    = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] 
+                      & (rk == 5'h0e) & (~|rj) & (~|rd);
+
+
+
 
   //aluop 译码：0 add, 1 sub, 2 slt, 3 sltu, 4 and, 5 nor, 6 or, 7 xor, 8 sll, 9 srl, 10 sra, 11 lui
   //12 mul, 13 mulh, 14 mulhu, 15 div, 16 divu, 17 mod, 18 modu
@@ -290,7 +321,7 @@ module ID_stage (
   assign ID_alu_op[ 0] = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                         | inst_jirl | inst_bl | inst_pcaddul2i
                         | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu | inst_st_b | inst_st_h;
-  assign ID_alu_op[1] = inst_sub_w;
+  assign ID_alu_op[1] = inst_sub_w | inst_bne | inst_beq;
   assign ID_alu_op[2] = inst_slt | inst_slti | inst_blt | inst_bge;
   assign ID_alu_op[3] = inst_sltu | inst_sltui | inst_bltu | inst_bgeu;
   assign ID_alu_op[4] = inst_and | inst_andi;
@@ -329,7 +360,7 @@ module ID_stage (
   assign jirl_offs = {{14{i16[15]}}, i16[15:0], 2'b0};
 
   assign src_reg_is_rd = inst_beq | inst_bne | inst_st_w | inst_blt | inst_bge |
-                         inst_bltu| inst_bgeu| inst_st_b | inst_st_h;          // 源寄存器是否为rd
+                         inst_bltu| inst_bgeu| inst_st_b | inst_st_h | inst_csrwr | inst_csrxchg;          // 源寄存器是否为rd
 
   assign ID_src1_is_pc = inst_jirl | inst_bl | inst_pcaddul2i;  // 源寄存器1是否为PC
 
@@ -362,7 +393,7 @@ module ID_stage (
   assign ID_res_from_MEM = inst_ld_w | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
   assign dst_is_r1 = inst_bl;
   assign gr_we = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge &
-                 ~inst_bltu & ~inst_bgeu& ~inst_st_b & ~inst_st_h;  // 是否写寄存器
+                 ~inst_bltu & ~inst_bgeu& ~inst_st_b & ~inst_st_h & ~inst_syscall;  // 是否写寄存器
   assign ID_mem_inst = {
     inst_st_w, inst_st_h, inst_st_b, inst_ld_w, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu
   };
@@ -373,12 +404,12 @@ module ID_stage (
   assign rf_raddr2 = src_reg_is_rd ? rd : rk;
   assign ID_rf_we = gr_we;
   assign ID_rf_waddr = dest;
-  assign ID_rf_bus = {ID_rf_we, ID_rf_waddr};
+  assign ID_rf_bus = {ID_csr_re, ID_rf_we, ID_rf_waddr};
   //写回、访存、执行阶段传回数据处理
 
   assign {WB_rf_we, WB_rf_waddr, WB_rf_wdata} = WB_rf_bus;
-  assign {MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata} = MEM_rf_bus;
-  assign {EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_rf_wdata} = EX_rf_bus;
+  assign {MEM_csr_re,MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata} = MEM_rf_bus;
+  assign {EX_csr_re,EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_rf_wdata} = EX_rf_bus;
 
   regfile u_regfile (
       .clk   (clk),
@@ -406,18 +437,30 @@ module ID_stage (
   assign rkd_value =  hazard_r2_ex ? EX_rf_wdata:
                         hazard_r2_mem ? MEM_rf_wdata:
                         hazard_r2_wb  ? WB_rf_wdata : rf_rdata2;
+                        
 
+  assign ID_csr_re = inst_csrrd | inst_csrwr | inst_csrxchg;
+  assign ID_csr_we = inst_csrwr | inst_csrxchg;
+  assign ID_csr_wmask = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
+  assign ID_csr_wvalue = rkd_value;
+  assign ID_csr_num = ID_inst[23:10];
+
+  assign ID_except_bus = {ID_csr_num, ID_csr_wmask, ID_csr_wvalue, inst_syscall, inst_ertn, ID_csr_we};
   //------------------------------ID_EX bus---------------------------------------
   assign ID_EX_bus = {
     ID_alu_op,  //19 bit
     ID_res_from_MEM,  //1  bit
     ID_alu_src1,  //32 bit
     ID_alu_src2,  //32 bit
+
     ID_mem_inst,  //8  bit
     ID_rf_we,  //1  bit
     ID_rf_waddr,  //5  bit
+
     ID_rkd_value,  //32 bit
-    ID_pc  //32 bit
+    ID_pc,  //32 bit
+
+    ID_csr_re  //1  bit
   };
 
 endmodule
