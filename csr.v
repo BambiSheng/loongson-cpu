@@ -108,8 +108,8 @@ module csr(
          32'b0;
 
   //------------------------csr to IF_stage------------------------
-    assign CSR_2_IF_pc = EXC_signal ? EXC_pc : 
-                        ERTN_signal ? eentry :
+    assign CSR_2_IF_pc = EXC_signal ? eentry : 
+                        ERTN_signal ? era :
                         32'b0;
     
   //-------------------寄存器时序电路---------------------------
@@ -205,11 +205,7 @@ module csr(
   // EENTRY
     always@(posedge clk)
     begin
-        if(EXC_signal)
-        begin
-            eentry_VA <= EXC_pc[31:6];
-        end
-        else if(we && (csr_num == `EENTRY))
+        if(we && (csr_num == `EENTRY))
         begin
             eentry_VA <= wmask[31:6] & wdata[31:6] | ~wmask[31:6] & eentry_VA;
         end
