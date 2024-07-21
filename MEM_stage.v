@@ -19,14 +19,21 @@ module MEM_stage (
     input  wire        clk,
     input  wire        resetn,
     output wire        MEM_allowin,
-    input  wire [38:0] EX_rf_bus,       // {EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_alu_result}
+    input  wire [39:0] EX_rf_bus,       // {EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_alu_result}
     input  wire        EX_MEM_valid,
     input  wire [31:0] EX_pc,
     input  wire [ 4:0] EX_mem_ld_inst,  //{inst_ld_w, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu}
     input  wire        WB_allowin,
-    output wire [37:0] MEM_rf_bus,      // {MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata}
+    output wire [38:0] MEM_rf_bus,      // {MEM_csr_re,MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata}
     output wire        MEM_WB_valid,
     output reg  [31:0] MEM_pc,
+
+    input wire WB_EXC_signal,
+    output wire MEM_EXC_signal,
+    
+    output wire [81:0] MEM_except_bus,
+    input wire  [81:0] EX_except_bus,
+
     input  wire [31:0] data_sram_rdata
 );
   wire        MEM_ready_go;
@@ -38,11 +45,17 @@ module MEM_stage (
     wire [31:0] MEM_rf_wdata   ;
     wire [31:0] MEM_mem_result ;
     reg  [7 :0] MEM_mem_ld_inst;
+
     wire inst_ld_w;
     wire inst_ld_b;
     wire inst_ld_h;
     wire inst_ld_bu;
     wire inst_ld_hu;
+
+    //csr
+    reg MEM_csr_re;
+    reg [81:0] MEM_except_bus;
+
 //------------------------------state control signal---------------------------------------
 
     assign MEM_ready_go      = 1'b1;
@@ -51,21 +64,27 @@ module MEM_stage (
     always @(posedge clk) begin
         if(~resetn)
             MEM_valid <= 1'b0;
+        else if(WB_EXC_signal)
+            MEM_valid <= 1'b0;
         else
             MEM_valid <= EX_MEM_valid & MEM_allowin; 
     end
 
+
+   assign MEM_EXC_signal=MEM_except_bus[2];
 //------------------------------EX TO MEM state interface---------------------------------------
     always @(posedge clk) begin
         if(~resetn) begin
             MEM_pc <= 32'b0;
-            {MEM_res_from_mem, MEM_rf_we, MEM_rf_waddr, MEM_alu_result} <= 38'b0;
+            {MEM_csr_re,MEM_res_from_mem, MEM_rf_we, MEM_rf_waddr, MEM_alu_result} <= 38'b0;
             MEM_mem_ld_inst <= 8'b0;
+            MEM_except_bus <= 82'b0;
         end
         if(EX_MEM_valid & MEM_allowin) begin
             MEM_pc <= EX_pc;
-            {MEM_res_from_mem, MEM_rf_we, MEM_rf_waddr, MEM_alu_result} <= EX_rf_bus;
+            {MEM_csr_re,MEM_res_from_mem, MEM_rf_we, MEM_rf_waddr, MEM_alu_result} <= EX_rf_bus;
             MEM_mem_ld_inst <= EX_mem_ld_inst;
+            MEM_except_bus <= EX_except_bus;
         end
     end
 
@@ -85,6 +104,6 @@ module MEM_stage (
                                     shift_rdata[31:16];
     
     assign MEM_rf_wdata = MEM_res_from_mem ?  MEM_mem_result : MEM_alu_result;
-    assign MEM_rf_bus  = {MEM_rf_we & MEM_valid, MEM_rf_waddr, MEM_rf_wdata};
+    assign MEM_rf_bus  = {MEM_csr_re & MEM_valid,MEM_rf_we & MEM_valid, MEM_rf_waddr, MEM_rf_wdata};
 
 endmodule

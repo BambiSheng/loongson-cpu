@@ -60,10 +60,11 @@ module csr(
 
   // ESTAT
   wire [31:0] estat;
-  reg [1:0] estat_IS_1_0;
-  reg [7:0] estat_IS_9_2; // R
-  reg estat_IS_11;     // R
-  reg estat_IS_12;   // R
+  reg [1:0] estat_IS_1_0=0;
+  reg [7:0] estat_IS_9_2=0; // R
+  reg estat_IS_11=0;     // R
+  reg estat_IS_12=0;   // R
+  //————————————————————————————————————————————临时修改——————————————————————————————————————————————
   reg [5:0] estat_Ecode; // R
   reg [8:0] estat_EsubCode; // R
   assign estat = {1'b0, estat_EsubCode, estat_Ecode, 3'b0, estat_IS_12, estat_IS_11, 1'b0, estat_IS_9_2, estat_IS_1_0};

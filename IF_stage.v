@@ -23,12 +23,17 @@ module IF_stage (
     // IF to ID interface
     output wire                   IF_ID_valid,
     output wire [`IF_ID_LEN -1:0] IF_ID_bus,
+
+    input wire WB_EXC_signal,
+    input wire WB_ERTN_signal,
+    input wire [31:0] CSR_2_IF_pc,
+
     // inst sram interface
-    output wire                   inst_sram_en,
-    output wire [            3:0] inst_sram_we,
-    output wire [           31:0] inst_sram_addr,
-    output wire [           31:0] inst_sram_wdata,
-    input  wire [           31:0] inst_sram_rdata
+    output wire        inst_sram_en,
+    output wire [ 3:0] inst_sram_we,
+    output wire [31:0] inst_sram_addr,
+    output wire [31:0] inst_sram_wdata,
+    input  wire [31:0] inst_sram_rdata
 );
 
   reg         IF_valid;
@@ -49,15 +54,12 @@ module IF_stage (
   assign IF_ID_bus   = {IF_inst, IF_pc};
 
 
-  assign seq_pc      = IF_pc + 3'h4;
-  assign nextpc      = br_taken ? br_target : seq_pc;
-
   //------------------------------state control signal---------------------------------------
   assign to_IF_valid = resetn;
   assign IF_ready_go = 1'b1;
-  assign IF_allowin  = ~IF_valid | IF_ready_go & ID_allowin;
+  assign IF_allowin  = ~IF_valid | IF_ready_go & ID_allowin | WB_EXC_signal | WB_ERTN_signal;
   assign IF_ID_valid = IF_valid & IF_ready_go;
-  
+
   always @(posedge clk) begin
     if (~resetn) IF_valid <= 1'b0;
     else if (IF_allowin)
@@ -65,15 +67,15 @@ module IF_stage (
   end
   //------------------------------inst sram interface---------------------------------------
 
-  assign inst_sram_en    = IF_allowin & resetn;
-  assign inst_sram_we    = 4'b0;
-  assign inst_sram_addr  = nextpc;
+  assign inst_sram_en = IF_allowin & resetn;
+  assign inst_sram_we = 4'b0;
+  assign inst_sram_addr = nextpc;
   assign inst_sram_wdata = 32'b0;
 
   //------------------------------pc relavant signals---------------------------------------
 
-  assign seq_pc          = IF_pc + 3'h4;
-  assign nextpc          = br_taken ? br_target : seq_pc;
+  assign seq_pc = IF_pc + 3'h4;
+  assign nextpc = (WB_EXC_signal | WB_ERTN_signal) ? CSR_2_IF_pc : br_taken ? br_target : seq_pc;
 
   //------------------------------IF TO ID state interface---------------------------------------
   //IF_pc存前一条指令的pc值
