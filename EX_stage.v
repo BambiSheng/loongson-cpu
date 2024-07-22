@@ -24,13 +24,13 @@ module EX_stage (
     input wire ID_EX_valid,
     input wire [`ID_EX_LEN -1:0] ID_EX_bus,
     input wire MEM_allowin,
-    output wire [39:0] EX_rf_bus,  // {EX_csr_re,EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_alu_result}
+    output wire [39:0] EX_rf_bus,  // {EX_csr_re,EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_alu_result_temp}
     output wire EX_MEM_valid,
     output reg [31:0] EX_pc,
     output reg [4:0] EX_mem_ld_inst,  //{inst_ld_w, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu}
 
-    input wire [81:0] ID_except_bus,
-    output reg [81:0] EX_except_bus,
+    input wire [84:0] ID_except_bus,
+    output wire [85:0] EX_except_bus,
     input wire MEM_EXC_signal,
     input wire WB_EXC_signal,
 
@@ -47,6 +47,7 @@ module EX_stage (
   reg  [ 31:0] EX_alu_src1;
   reg  [ 31:0] EX_alu_src2;
   wire [ 31:0] EX_alu_result;
+  wire [ 31:0] EX_alu_result_temp;
   wire         alu_complete;
   reg  [ 31:0] EX_rkd_value;
   reg          EX_res_from_mem;
@@ -56,16 +57,29 @@ module EX_stage (
 
   reg  [  2:0] EX_mem_st_inst;
 
+
+  wire         inst_ld_h;
+  wire         inst_ld_w;
+  wire         inst_ld_hu;
+  wire         inst_ld_b;
+  wire         inst_ld_bu;
   wire         inst_st_w;
   wire         inst_st_h;
   wire         inst_st_b;
+  reg [84:0]   ID_except_bus_tmp;
 
-
+  reg         rd_cnt_h;
+  reg         rd_cnt_l;
+  reg  [63:0]  EX_timer_cnt;
 
   reg         EX_csr_re;      //EX阶段csr读使能
   wire        EX_EXC_signal;  //EX阶段异常信号
+
+  wire        EX_exc_ALE;
+  wire [ 5:0] EX_except_bus_tmp;
   
-  assign EX_EXC_signal = EX_except_bus[2];
+  assign EX_except_bus_tmp = {EX_except_bus[84:81],EX_except_bus[2:1]};
+  assign EX_EXC_signal = EX_exc_ALE | (|EX_except_bus_tmp);
   //流水线状态转移
 
   assign EX_ready_go  = alu_complete;
@@ -86,15 +100,20 @@ module EX_stage (
       EX_res_from_mem, 
       EX_alu_src1, 
       EX_alu_src2,
+
       EX_mem_st_inst,
       EX_mem_ld_inst, 
       EX_rf_we, 
       EX_rf_waddr, 
+
       EX_rkd_value, 
       EX_pc,
-      EX_csr_re
+
+      EX_csr_re,
+      rd_cnt_h,
+      rd_cnt_l
       } <= {`ID_EX_LEN{1'b0}};
-      EX_except_bus<=82'b0;
+      ID_except_bus_tmp <= 85'b0;
     end
     else if (ID_EX_valid & EX_allowin)
     begin
@@ -108,15 +127,17 @@ module EX_stage (
       EX_rf_waddr, 
       EX_rkd_value, 
       EX_pc,
-      EX_csr_re
+      EX_csr_re,
+      rd_cnt_h,
+      rd_cnt_l
       } <= ID_EX_bus;
-      EX_except_bus<=ID_except_bus;
+      ID_except_bus_tmp <= ID_except_bus;
     end
   end
   //alu接口
   alu u_alu (
       .clk       (clk),
-      .resetn    (resetn),
+      .resetn    (resetn& ~WB_EXC_signal),
       .alu_op    (EX_alu_op),
       .alu_src1  (EX_alu_src1),
       .alu_src2  (EX_alu_src2),
@@ -124,12 +145,20 @@ module EX_stage (
       .complete  (alu_complete)
   );
 
+  assign EX_except_bus = {EX_exc_ALE, ID_except_bus_tmp};
   //寄存器数据转发
-  assign EX_rf_bus = {EX_csr_re & EX_valid,EX_res_from_mem & EX_valid, EX_rf_we & EX_valid, EX_rf_waddr, EX_alu_result};
+  assign EX_alu_result_temp = {32{~rd_cnt_h & ~rd_cnt_l}} & EX_alu_result;
+  assign EX_rf_bus = {EX_csr_re & EX_valid,EX_res_from_mem & EX_valid, EX_rf_we & EX_valid & (~EX_exc_ALE), EX_rf_waddr, EX_alu_result_temp};
 
   //sram数据接口
 
   assign {inst_st_w, inst_st_h, inst_st_b} = EX_mem_st_inst;
+  assign {inst_ld_w, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu} = EX_mem_ld_inst;
+
+
+  assign EX_exc_ALE = ((|EX_alu_result[1:0]) & (inst_st_w | inst_ld_w)|
+                          EX_alu_result[0] & (inst_st_h|inst_ld_hu|inst_ld_h)) & EX_valid;
+
 
   wire ex_alu_res_0=EX_alu_result[0];
   wire ex_alu_res_1=EX_alu_result[1];

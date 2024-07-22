@@ -1,8 +1,8 @@
 `ifndef mycpu
     `define mycpu
 
-    `define IF_ID_LEN 64
-    `define ID_EX_LEN 162+1
+    `define IF_ID_LEN 65
+    `define ID_EX_LEN 165
 
 
     `define CRMD 14'h0
@@ -24,5 +24,12 @@
 
     `define TCFG_N 32
 
+    `define ECODE_INT       6'h00
+    `define ECODE_ADEF      6'h08
+    `define ECODE_ALE       6'h09   
+    `define ECODE_SYS       6'h0B
+    `define ECODE_BRK       6'h0C   
+    `define ECODE_INE       6'h0D
+    `define ECODE_TLBR      6'h3F
     
 `endif

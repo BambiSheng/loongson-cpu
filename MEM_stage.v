@@ -31,20 +31,23 @@ module MEM_stage (
     input wire WB_EXC_signal,
     output wire MEM_EXC_signal,
     
-    output wire [81:0] MEM_except_bus,
-    input wire  [81:0] EX_except_bus,
+    output reg [85:0] MEM_except_bus,  // {EX_exc_ALE, ID_exc_ADEF, ID_exc_INE, ID_exc_INT, ID_exc_break, ID_csr_num, ID_csr_wmask, ID_csr_wvalue, ID_exc_syscall, inst_ertn, ID_csr_we}
+    input wire  [85:0] EX_except_bus,
+    
+    output reg  [31:0] MEM_alu_result,
 
     input  wire [31:0] data_sram_rdata
 );
   wire        MEM_ready_go;
     reg         MEM_valid;
-    reg  [31:0] MEM_alu_result ; 
+    
     reg         MEM_res_from_mem;
     reg         MEM_rf_we      ;
     reg  [4 :0] MEM_rf_waddr   ;
     wire [31:0] MEM_rf_wdata   ;
     wire [31:0] MEM_mem_result ;
     reg  [7 :0] MEM_mem_ld_inst;
+    wire [6 :0] MEM_EXC_signals;
 
     wire inst_ld_w;
     wire inst_ld_b;
@@ -54,7 +57,6 @@ module MEM_stage (
 
     //csr
     reg MEM_csr_re;
-    reg [81:0] MEM_except_bus;
 
 //------------------------------state control signal---------------------------------------
 
@@ -71,14 +73,15 @@ module MEM_stage (
     end
 
 
-   assign MEM_EXC_signal=MEM_except_bus[2];
+   assign MEM_EXC_signals= {MEM_except_bus[85:81], MEM_except_bus[2:1]};
+   assign MEM_EXC_signal = |MEM_EXC_signals;
 //------------------------------EX TO MEM state interface---------------------------------------
     always @(posedge clk) begin
         if(~resetn) begin
             MEM_pc <= 32'b0;
             {MEM_csr_re,MEM_res_from_mem, MEM_rf_we, MEM_rf_waddr, MEM_alu_result} <= 38'b0;
             MEM_mem_ld_inst <= 8'b0;
-            MEM_except_bus <= 82'b0;
+            MEM_except_bus <= 85'b0;
         end
         if(EX_MEM_valid & MEM_allowin) begin
             MEM_pc <= EX_pc;

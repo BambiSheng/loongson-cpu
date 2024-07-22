@@ -51,6 +51,9 @@ module IF_stage (
 
   wire [31:0] IF_inst;
   reg  [31:0] IF_pc;
+  wire        IF_ex_ADEF;
+  assign IF_ex_ADEF = (|IF_pc[1:0]) & IF_valid;
+  assign IF_ID_bus   = {IF_ex_ADEF, IF_inst, IF_pc};
 
 
   //------------------------------state control signal---------------------------------------
@@ -84,5 +87,4 @@ module IF_stage (
   end
 
   assign IF_inst   = inst_sram_rdata;
-  assign IF_ID_bus = {IF_inst, IF_pc};  // 32+32
 endmodule

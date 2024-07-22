@@ -61,11 +61,16 @@ module mycpu_top(
     wire [5:0] EXC_ecode;
     wire [8:0] EXC_esubcode;
     wire [31:0] EXC_pc;
-    wire [31:0] CSR_2_IF_pc;
 
-    wire [81:0] ID_except_bus;
-    wire [81:0] EX_except_bus;
-    wire [81:0] MEM_except_bus;
+    wire [31:0] CSR_2_IF_pc;
+    wire INT_signal;
+
+    wire [84:0] ID_except_bus;
+    wire [85:0] EX_except_bus;
+    wire [85:0] MEM_except_bus;
+
+    wire [31:0] WB_vaddr;
+    wire [31:0] MEM_alu_result;
 
     IF_stage IF(
         .clk(clk),
@@ -103,9 +108,10 @@ module mycpu_top(
         .WB_rf_bus(WB_rf_bus),
         .MEM_rf_bus(MEM_rf_bus),
         .EX_rf_bus(EX_rf_bus),
-
         .ID_except_bus(ID_except_bus),
-        .WB_EXC_signal(WB_EXC_signal|ERTN_signal)
+
+        .WB_EXC_signal(WB_EXC_signal|ERTN_signal),
+        .INT_signal(INT_signal)
     );
 
     EX_stage EX(
@@ -154,7 +160,7 @@ module mycpu_top(
 
         .MEM_except_bus(MEM_except_bus),
         .EX_except_bus(EX_except_bus),
-
+        .MEM_alu_result(MEM_alu_result),
 
         .data_sram_rdata(data_sram_rdata)
     ) ;
@@ -182,9 +188,12 @@ module mycpu_top(
         .csr_wmask(wmask),
         .EXC_signal(WB_EXC_signal),
         .ERTN_signal(ERTN_signal),
+        .WB_vaddr(WB_vaddr),
         .WB_pc(EXC_pc),
         .WB_ecode(EXC_ecode),
         .WB_esubcode(EXC_esubcode),
+
+        .MEM_alu_result(MEM_alu_result),
        
         .MEM_except_bus(MEM_except_bus)
     );
@@ -205,6 +214,9 @@ module mycpu_top(
         .EXC_ecode(EXC_ecode),
         .EXC_esubcode(EXC_esubcode),
         .EXC_pc(EXC_pc),
-        .CSR_2_IF_pc(CSR_2_IF_pc)
+        .EXC_vaddr(WB_vaddr),
+
+        .CSR_2_IF_pc(CSR_2_IF_pc),
+        .INT_signal(INT_signal)
     );
 endmodule

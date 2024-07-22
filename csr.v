@@ -95,7 +95,7 @@ module csr(
   reg [31:0] badv;
 
   // TID
-  reg [31:0] tid;
+  reg [31:0] tid = 0;
 
   // TCFG: set n = 32
   wire [31:0] tcfg;
