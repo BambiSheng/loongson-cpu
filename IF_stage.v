@@ -51,7 +51,6 @@ module IF_stage (
 
   wire [31:0] IF_inst;
   reg  [31:0] IF_pc;
-  assign IF_ID_bus   = {IF_inst, IF_pc};
 
 
   //------------------------------state control signal---------------------------------------
