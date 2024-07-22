@@ -105,7 +105,7 @@ module mycpu_top(
         .EX_rf_bus(EX_rf_bus),
 
         .ID_except_bus(ID_except_bus),
-        .WB_EXC_signal(WB_EXC_signal|WB_EXC_signal)
+        .WB_EXC_signal(WB_EXC_signal|ERTN_signal)
     );
 
     EX_stage EX(
@@ -131,7 +131,7 @@ module mycpu_top(
         .EX_except_bus(EX_except_bus),
 
         .MEM_EXC_signal(MEM_EXC_signal),
-        .WB_EXC_signal(WB_EXC_signal|WB_EXC_signal)
+        .WB_EXC_signal(WB_EXC_signal|ERTN_signal)
     );
 
     MEM_stage MEM(
@@ -149,7 +149,7 @@ module mycpu_top(
         .MEM_WB_valid(MEM_WB_valid),
         .MEM_pc(MEM_pc),
 
-        .WB_EXC_signal(WB_EXC_signal|WB_EXC_signal),
+        .WB_EXC_signal(WB_EXC_signal|ERTN_signal),
         .MEM_EXC_signal(MEM_EXC_signal),
 
         .MEM_except_bus(MEM_except_bus),
