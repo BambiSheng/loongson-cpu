@@ -17,7 +17,7 @@ module IF_stage (
   */
     input  wire                   clk,
     input  wire                   resetn,
-    // ID to ID interface
+    // ID to IF interface
     input  wire                   ID_allowin,
     input  wire [           32:0] br_bus,
     // IF to ID interface
