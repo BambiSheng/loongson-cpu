@@ -28,16 +28,21 @@ module EX_stage (
     output wire EX_MEM_valid,
     output reg [31:0] EX_pc,
     output reg [4:0] EX_mem_ld_inst,  //{inst_ld_w, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu}
+    output wire      EX_req,
 
     input wire [84:0] ID_except_bus,
     output wire [85:0] EX_except_bus,
     input wire MEM_EXC_signal,
     input wire WB_EXC_signal,
 
-    output wire        data_sram_en,
-    output wire [ 3:0] data_sram_we,
+    output wire        data_sram_req,
+    output wire        data_sram_wr,
+    output wire [ 1:0] data_sram_size,
+    output wire [ 3:0] data_sram_wstrb,
     output wire [31:0] data_sram_addr,
-    output wire [31:0] data_sram_wdata
+    output wire [31:0] data_sram_wdata,
+    input  wire        data_sram_addr_ok,
+    input  wire        data_sram_data_ok
 );
 
   wire         EX_ready_go;
@@ -82,7 +87,7 @@ module EX_stage (
   assign EX_EXC_signal = EX_exc_ALE | (|EX_except_bus_tmp);
   //流水线状态转移
 
-  assign EX_ready_go  = alu_complete;
+  assign EX_ready_go  = alu_complete & (~data_sram_req | data_sram_req & data_sram_addr_ok); //不请求数据或请求数据且数据地址有效
   assign EX_allowin   = ~EX_valid | EX_ready_go & MEM_allowin;
   assign EX_MEM_valid = EX_valid & EX_ready_go;
   always @(posedge clk) begin
@@ -137,7 +142,7 @@ module EX_stage (
   //alu接口
   alu u_alu (
       .clk       (clk),
-      .resetn    (resetn& ~WB_EXC_signal),
+      .resetn    (resetn& ~WB_EXC_signal & ~(ID_EX_valid & EX_allowin)),
       .alu_op    (EX_alu_op),
       .alu_src1  (EX_alu_src1),
       .alu_src2  (EX_alu_src2),
@@ -177,8 +182,12 @@ module EX_stage (
   assign EX_mem_we[3] = inst_st_w | st_h_high | st_b_high;
 
 
-  assign data_sram_en = (EX_res_from_mem || EX_mem_we) && EX_valid;
-  assign data_sram_we = {4{EX_valid&~EX_EXC_signal&~MEM_EXC_signal&~WB_EXC_signal}} & EX_mem_we;
+  assign EX_req = EX_res_from_mem || EX_mem_we[0] || EX_mem_we[1] || EX_mem_we[2] || EX_mem_we[3];
+
+  assign data_sram_req = (EX_res_from_mem || EX_mem_we) & EX_valid &  MEM_allowin;
+  assign data_sram_wr = (EX_valid&~EX_EXC_signal&~MEM_EXC_signal&~WB_EXC_signal) & (|EX_mem_we);
+  assign data_sram_wstrb = EX_mem_we;
+  assign data_sram_size = inst_st_w?2'b10:inst_st_h?2'b01:2'b00;
   assign data_sram_addr = EX_alu_result;
 
   assign data_sram_wdata[7:0] = EX_rkd_value[7:0];

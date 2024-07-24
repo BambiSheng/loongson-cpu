@@ -3,16 +3,24 @@ module mycpu_top(
     input  wire        clk,
     input  wire        resetn,
     // inst sram interface
-    output wire        inst_sram_en,
-    output wire [ 3:0] inst_sram_we,
+    output wire        inst_sram_req,
+    output wire        inst_sram_wr,
+    output wire [ 1:0] inst_sram_size,
+    output wire [ 3:0] inst_sram_wstrb,
     output wire [31:0] inst_sram_addr,
     output wire [31:0] inst_sram_wdata,
+    input  wire        inst_sram_addr_ok,
+    input  wire        inst_sram_data_ok,
     input  wire [31:0] inst_sram_rdata,
     // data sram interface
-    output wire        data_sram_en,
-    output wire [ 3:0] data_sram_we,
+    output wire        data_sram_req,
+    output wire        data_sram_wr,
+    output wire [ 1:0] data_sram_size,
+    output wire [ 3:0] data_sram_wstrb,
     output wire [31:0] data_sram_addr,
     output wire [31:0] data_sram_wdata,
+    input  wire        data_sram_addr_ok,
+    input  wire        data_sram_data_ok,
     input  wire [31:0] data_sram_rdata,
     // trace debug interface
     output wire [31:0] debug_wb_pc,
@@ -38,7 +46,7 @@ module mycpu_top(
     wire [38:0] MEM_rf_bus;
     wire [37:0] WB_rf_bus;
 
-    wire [32:0] br_bus;
+    wire [33:0] br_bus;
 
     wire [`IF_ID_LEN -1:0] IF_ID_bus;
     wire [`ID_EX_LEN -1:0] ID_EX_bus;
@@ -72,6 +80,9 @@ module mycpu_top(
     wire [31:0] WB_vaddr;
     wire [31:0] MEM_alu_result;
 
+    //added in exp14
+    wire EX_req;
+
     IF_stage IF(
         .clk(clk),
         .resetn(resetn),
@@ -81,10 +92,14 @@ module mycpu_top(
         .IF_ID_valid(IF_ID_valid),
         .IF_ID_bus(IF_ID_bus),
 
-        .inst_sram_en(inst_sram_en),
-        .inst_sram_we(inst_sram_we),
+        .inst_sram_req(inst_sram_req),
+        .inst_sram_wr(inst_sram_wr),
+        .inst_sram_size(inst_sram_size),
+        .inst_sram_wstrb(inst_sram_wstrb),
         .inst_sram_addr(inst_sram_addr),
         .inst_sram_wdata(inst_sram_wdata),
+        .inst_sram_addr_ok(inst_sram_addr_ok),
+        .inst_sram_data_ok(inst_sram_data_ok),
         .inst_sram_rdata(inst_sram_rdata),
 
         .WB_EXC_signal(WB_EXC_signal),
@@ -127,11 +142,15 @@ module mycpu_top(
         .EX_MEM_valid(EX_MEM_valid),
         .EX_pc(EX_pc),
         .EX_mem_ld_inst(EX_mem_ld_inst),
-        
-        .data_sram_en(data_sram_en),
-        .data_sram_we(data_sram_we),
+        .EX_req(EX_req),
+
+        .data_sram_req(data_sram_req),
+        .data_sram_wr(data_sram_wr),
+        .data_sram_size(data_sram_size),
+        .data_sram_wstrb(data_sram_wstrb),
         .data_sram_addr(data_sram_addr),
         .data_sram_wdata(data_sram_wdata),
+        .data_sram_addr_ok(data_sram_addr_ok),
 
         .ID_except_bus(ID_except_bus),
         .EX_except_bus(EX_except_bus),
@@ -149,6 +168,7 @@ module mycpu_top(
         .EX_MEM_valid(EX_MEM_valid),
         .EX_pc(EX_pc),
         .EX_mem_ld_inst(EX_mem_ld_inst),
+        .EX_req(EX_req),
 
         .WB_allowin(WB_allowin),
         .MEM_rf_bus(MEM_rf_bus),
@@ -162,7 +182,8 @@ module mycpu_top(
         .EX_except_bus(EX_except_bus),
         .MEM_alu_result(MEM_alu_result),
 
-        .data_sram_rdata(data_sram_rdata)
+        .data_sram_rdata(data_sram_rdata),
+        .data_sram_data_ok(data_sram_data_ok)
     ) ;
 
     WB_stage WB(
