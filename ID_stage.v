@@ -20,7 +20,7 @@ module ID_stage (
     input  wire                   resetn,
     input  wire                   IF_ID_valid,
     output wire                   ID_allowin,
-    output wire [           32:0] br_bus,
+    output wire [           33:0] br_bus,
     input  wire [`IF_ID_LEN -1:0] IF_ID_bus,
     input  wire                   EX_allowin,
     output wire                   ID_EX_valid,
@@ -63,6 +63,7 @@ module ID_stage (
   wire [31:0] jirl_offs;  // 跳转偏移量
   wire        br_taken;  // 是否分支跳转
   wire [31:0] br_target;  // 分支目标地址
+  wire        br_stall;  // 分支冲突
 
   wire [ 5:0] op_31_26;
   wire [ 3:0] op_25_22;
@@ -141,8 +142,6 @@ module ID_stage (
   
   wire        INST_EXIST; // 判断指令是否存在
   
-
-
   wire        need_ui5;  // 是否需要无符号立即数5位  
   wire        need_ui12;  // 是否需要无符号立即数12位
   wire        need_si12;  // 是否需要有符号立即数12位
@@ -205,6 +204,8 @@ module ID_stage (
   assign ID_ready_go = ~ID_stall;
   assign ID_allowin = ~ID_valid | ID_ready_go & EX_allowin;
   assign ID_stall    = (EX_res_from_mem | EX_csr_re) & (hazard_r1_ex & need_r1 | hazard_r2_ex & need_r2) | MEM_csr_re & (hazard_r1_mem | hazard_r2_mem);   // load-use冲突
+  assign br_stall    = ID_stall & (inst_jirl   | inst_b      | inst_bl     | inst_blt   | inst_bge    | inst_bltu  |
+                                   inst_bgeu   | inst_beq    | inst_bne ); // 分支冲突判断
   assign ID_EX_valid = ID_valid & ID_ready_go;
   always @(posedge clk) begin
     if (~resetn) ID_valid <= 1'b0;
@@ -212,7 +213,6 @@ module ID_stage (
     else if (br_taken) ID_valid <= 1'b0;
     else if (ID_allowin) ID_valid <= IF_ID_valid;
   end
-
 
   //------------------------------if and id state interface---------------------------------------
   always @(posedge clk) begin
@@ -238,7 +238,7 @@ module ID_stage (
                     ) && ID_valid;    // 分支跳转条件
   assign br_target = (inst_beq || inst_bne || inst_bl || inst_b || 
                       inst_blt || inst_bge || inst_bltu || inst_bgeu ) ? (ID_pc + br_offs) :(rj_value + jirl_offs);       // 分支目标地址
-  assign br_bus = {br_taken, br_target};
+  assign br_bus = {br_stall,br_taken, br_target};
   //------------------------------decode instruction---------------------------------------
 
   assign op_31_26 = ID_inst[31:26];
