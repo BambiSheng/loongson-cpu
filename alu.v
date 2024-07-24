@@ -84,6 +84,17 @@ wire        adder_cout;
 // 除法器
 wire        div_en;
 wire        div_complete;
+wire        mul_en;
+reg         mul_complete;
+
+always @(posedge clk) begin
+  if(~resetn)
+    mul_complete <= 1'b0;
+  else if(mul_en & ~mul_complete)
+    mul_complete <= 1'b1;
+  else
+    mul_complete <= 1'b0;
+end
 
 assign adder_a   = alu_src1;
 assign adder_b   = (op_sub | op_slt | op_sltu) ? ~alu_src2 : alu_src2;  //src1 - src2 rj-rk
@@ -118,6 +129,7 @@ assign sr64_result = {{32{op_sra & alu_src1[31]}}, alu_src1[31:0]} >> alu_src2[4
 assign sr_result   = sr64_result[31:0];
 
 // Mul, Div, Mod
+assign mul_en = op_mul | op_mulh | op_mulhu;
 assign div_en = op_mod | op_modu | op_div | op_divu;
 Wallace_Mul u_mul(
     .mul_clk(clk),
@@ -157,5 +169,5 @@ assign alu_result = ({32{op_add|op_sub}} & add_sub_result)
                   | ({32{op_mul       }} & mul_result[31:0])
                   | ({32{op_mulh|op_mulhu}} & mul_result[63:32]);
 
-assign complete = ~resetn | div_complete & div_en | ~div_en;
+assign complete = (~|alu_op[18:12]) | div_complete & div_en | mul_complete & mul_en | ~div_en & ~mul_en;
 endmodule

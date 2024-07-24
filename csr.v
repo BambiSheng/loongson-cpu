@@ -89,7 +89,9 @@ module csr(
   wire [31:0] ecfg;
   reg [9:0] efcg_LIE_9_0;
   reg [1:0] efcg_LIE_12_11;
+  
   assign ecfg = {19'b0, efcg_LIE_12_11, 1'b0, efcg_LIE_9_0};
+
 
   // BADV
   reg [31:0] badv;
@@ -279,6 +281,7 @@ module csr(
     end
   end
   // ECFG
+
   always@(posedge clk)
   begin
     if(~resetn)
