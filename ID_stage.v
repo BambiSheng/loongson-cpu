@@ -1,3 +1,4 @@
+`include "mycpu.h"
 module ID_stage (
     /*
   ID_stage模块
@@ -11,10 +12,15 @@ module ID_stage (
   EX_allowin: 允许EX_stage接收数据
   ID_EX_valid: ID_EX是否有效
   ID_EX_bus: ID_EX总线
-  
+
+  ID_except_bus: ID异常总线
+
   WB_rf_bus: WB数据转发总线
   MEM_rf_bus: MEM数据转发总线
   EX_rf_bus: EX数据转发总线
+
+  WB_EXC_signal: WB异常信号
+  INT_signal: 中断信号
   */
     input  wire                   clk,
     input  wire                   resetn,
