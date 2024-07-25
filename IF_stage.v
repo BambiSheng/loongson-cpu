@@ -155,7 +155,7 @@ module IF_stage (
   begin
     if (~resetn)
       inst_discard <= 1'b0;
-    else if (!inst_sram_data_ok && IF_cancel & ~IF_allowin & ~IF_ready_go)  //allowin=0且ready_go=0时
+    else if (!inst_sram_data_ok && IF_cancel & ~IF_allowin & ~IF_ready_go | IF_cancel & (WB_EXC_signal | WB_ERTN_signal) & ~IF_ready_go & IF_valid)  //allowin=0且ready_go=0时
       inst_discard <= 1'b1;
     else if (inst_discard & inst_sram_data_ok)  //需要抹去一条指令
       inst_discard <= 1'b0;
