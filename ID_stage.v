@@ -33,7 +33,7 @@ module ID_stage (
     output wire [`ID_EX_LEN -1:0] ID_EX_bus,
     output wire [84:0] ID_except_bus,
     input wire [37:0] WB_rf_bus,   // {WB_rf_we,WB_rf_we, WB_rf_waddr, WB_rf_wdata}
-    input wire [38:0] MEM_rf_bus,  // {MEM_csr_re,MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata}
+    input wire [39:0] MEM_rf_bus,  // {MEM_csr_re,MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata}
     input wire [39:0] EX_rf_bus,    // {EX_csr_re,EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_alu_result}
 
     input wire WB_EXC_signal,
@@ -179,6 +179,7 @@ module ID_stage (
   wire        MEM_rf_we;
   wire [ 4:0] MEM_rf_waddr;
   wire [31:0] MEM_rf_wdata;
+  wire        MEM_res_from_mem;
   wire        MEM_csr_re  ;
 
   wire        EX_rf_we;
@@ -209,7 +210,8 @@ module ID_stage (
   //------------------------------state control signal---------------------------------------
   assign ID_ready_go = ~ID_stall;
   assign ID_allowin = ~ID_valid | ID_ready_go & EX_allowin;
-  assign ID_stall    = (EX_res_from_mem | EX_csr_re) & (hazard_r1_ex & need_r1 | hazard_r2_ex & need_r2) | MEM_csr_re & (hazard_r1_mem | hazard_r2_mem);   // load-use冲突
+  assign ID_stall    = (EX_res_from_mem | EX_csr_re) & (hazard_r1_ex & need_r1 | hazard_r2_ex & need_r2)|
+                       (MEM_res_from_mem | MEM_csr_re)& (hazard_r1_mem & need_r1| hazard_r2_mem & need_r2)                               ;   // load-use冲突
   assign br_stall    = ID_stall & (inst_jirl   | inst_b      | inst_bl     | inst_blt   | inst_bge    | inst_bltu  |
                                    inst_bgeu   | inst_beq    | inst_bne ); // 分支冲突判断
   assign ID_EX_valid = ID_valid & ID_ready_go;
@@ -460,7 +462,7 @@ module ID_stage (
   //写回、访存、执行阶段传回数据处理
 
   assign {WB_rf_we, WB_rf_waddr, WB_rf_wdata} = WB_rf_bus;
-  assign {MEM_csr_re,MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata} = MEM_rf_bus;
+  assign {MEM_res_from_mem,MEM_csr_re,MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata} = MEM_rf_bus;
   assign {EX_csr_re,EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_rf_wdata} = EX_rf_bus;
 
   regfile u_regfile (

@@ -25,7 +25,7 @@ module MEM_stage (
     input  wire [ 4:0] EX_mem_ld_inst,  //{inst_ld_w, inst_ld_b, inst_ld_h, inst_ld_bu, inst_ld_hu}
     input  wire        EX_req,          //EX阶段是否需要数据
     input  wire        WB_allowin,
-    output wire [38:0] MEM_rf_bus,      // {MEM_csr_re,MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata}
+    output wire [39:0] MEM_rf_bus,      // {MEM_csr_re,MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata}
     output wire        MEM_WB_valid,
     output reg  [31:0] MEM_pc,
 
@@ -135,6 +135,6 @@ wire [31:0] shift_rdata;
                                     shift_rdata[31:16];
     
     assign MEM_rf_wdata = MEM_res_from_mem ?  MEM_mem_result : MEM_alu_result;
-    assign MEM_rf_bus  = {MEM_csr_re & MEM_valid,MEM_rf_we & MEM_valid, MEM_rf_waddr, MEM_rf_wdata};
+    assign MEM_rf_bus  = {MEM_res_from_mem, MEM_csr_re & MEM_valid,MEM_rf_we & MEM_valid, MEM_rf_waddr, MEM_rf_wdata};
 
 endmodule

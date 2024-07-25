@@ -42,7 +42,8 @@ module EX_stage (
     output wire [31:0] data_sram_addr,
     output wire [31:0] data_sram_wdata,
     input  wire        data_sram_addr_ok,
-    input  wire        data_sram_data_ok
+    input  wire        data_sram_data_ok,    //不知道这里要不要改
+    input wire [31:0] data_sram_rdata
 );
 
   wire         EX_ready_go;

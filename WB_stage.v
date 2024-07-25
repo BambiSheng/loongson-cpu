@@ -4,7 +4,7 @@ module WB_stage(
     // MEM TO WB state interface
     output wire        WB_allowin,
     
-    input  wire [38:0] MEM_rf_bus, // {MEM_csr_re,MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata}
+    input  wire [39:0] MEM_rf_bus, // {MEM_csr_re,MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata}
     input  wire        MEM_WB_valid,
     input  wire [31:0] MEM_pc,    
      // ID TO WB state interface
@@ -48,6 +48,7 @@ module WB_stage(
     wire        WB_exc_break;
     wire        WB_exc_INE;
     wire        WB_exc_INT;
+    reg        MEM_res_from_mem;
 
 
 
@@ -78,7 +79,7 @@ module WB_stage(
             WB_vaddr <= MEM_alu_result;
             WB_pc <= MEM_pc;
             WB_except_bus <= MEM_except_bus;
-            {csr_re,WB_rf_we, WB_rf_waddr, WB_rf_wdata_temp} <= MEM_rf_bus;
+            {MEM_res_from_mem,csr_re,WB_rf_we, WB_rf_waddr, WB_rf_wdata_temp} <= MEM_rf_bus;
         end
     end
 

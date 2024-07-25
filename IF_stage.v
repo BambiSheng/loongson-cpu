@@ -46,8 +46,10 @@ module IF_stage (
     output wire [31:0] inst_sram_wdata,
     input  wire        inst_sram_addr_ok,
     input  wire        inst_sram_data_ok,
-    input  wire [31:0] inst_sram_rdata
-  );
+    input  wire [31:0] inst_sram_rdata,
+
+    input wire [3:0] axi_arid
+);
 
   reg         IF_valid;
   wire        IF_ready_go;
@@ -61,6 +63,7 @@ module IF_stage (
   wire        br_taken;
   wire [31:0] br_target;
 
+  reg         pre_IF_block;
   assign {br_stall, br_taken, br_target} = br_bus;
 
   wire [31:0] IF_inst;
@@ -68,93 +71,82 @@ module IF_stage (
   wire        IF_exc_ADEF;
 
 
-  wire pre_IF_ready_go;
+  wire        pre_IF_ready_go;
+  reg         pre_IF_EXC_signal;
 
-  reg inst_buffer_valid;
-  reg [31:0] inst_buffer;
-  reg PC_buf_valid;
-  reg [31:0] PC_buffer;
+  reg         inst_buffer_valid;
+  reg  [31:0] inst_buffer;
+  reg         PC_buf_valid;
+  reg  [31:0] PC_buffer;
 
 
-  wire IF_cancel;
-  reg inst_discard;
+  wire        IF_cancel;
+  reg         inst_discard;
 
   //------------------------------pre-IF signal----------------------------------------------
   assign pre_IF_ready_go = inst_sram_req & inst_sram_addr_ok;
-  assign to_IF_valid = pre_IF_ready_go;
+  assign to_IF_valid = pre_IF_ready_go & ~IF_cancel & ~pre_IF_block;
   assign seq_pc = IF_pc + 3'h4;
   assign nextpc = (WB_EXC_signal | WB_ERTN_signal)? CSR_2_IF_pc  : PC_buf_valid? PC_buffer :br_taken? br_target: seq_pc;
 
-
+  always @(posedge clk) begin
+    if (~resetn) pre_IF_block <= 1'b0;
+    else if (IF_cancel & ~pre_IF_block & ~axi_arid[0] & ~inst_sram_data_ok) pre_IF_block <= 1'b1;
+    else if (inst_sram_data_ok) pre_IF_block <= 1'b0;
+  end
 
   //------------------------------state control signal---------------------------------------
   assign IF_ready_go = (inst_sram_data_ok|inst_buffer_valid) & ~ inst_discard;   //存在有效返回值
-  assign IF_allowin = ~IF_valid | IF_ready_go & ID_allowin ;
+  assign IF_allowin = ~IF_valid | IF_ready_go & ID_allowin;
   assign IF_ID_valid = IF_valid & IF_ready_go;
 
-  always @(posedge clk)
-  begin
-    if (~resetn)
-      IF_valid <= 1'b0;
+  always @(posedge clk) begin
+    if (~resetn) IF_valid <= 1'b0;
     else if (IF_allowin)  //此时允许进入新的指令
       IF_valid <= to_IF_valid;
-    else if (IF_cancel)
-      IF_valid <= 1'b0;
+    else if (IF_cancel) IF_valid <= 1'b0;
   end
 
   //------------------------------IF TO ID state interface---------------------------------------
   //IF_pc存前一条指令的pc值
-  always @(posedge clk)
-  begin
-    if (~resetn)
-      IF_pc <= 32'h1BFF_FFFC;
-    else if (IF_allowin & pre_IF_ready_go)
-      IF_pc <= nextpc;
+  always @(posedge clk) begin
+    if (~resetn) IF_pc <= 32'h1BFF_FFFC;
+    else if (IF_allowin & to_IF_valid) IF_pc <= nextpc;
   end
 
   // 设置寄存器，暂存指令，并用valid信号表示其内指令是否有效
-  always @(posedge clk)
-  begin
-    if (~resetn)
-    begin
+  always @(posedge clk) begin
+    if (~resetn) begin
       inst_buffer_valid <= 1'b0;
       inst_buffer <= 32'h0;
-    end
-    else if (IF_ID_valid & !ID_allowin )
-    begin  //
+    end else if (IF_ID_valid & !ID_allowin) begin  //
       inst_buffer_valid <= 1'b1;
       inst_buffer <= inst_sram_rdata;
-    end
-    else if (IF_cancel && inst_buffer_valid && !IF_allowin && IF_ready_go)
-    begin
+    end else if (IF_cancel && inst_buffer_valid && !IF_allowin && IF_ready_go) begin
       inst_buffer_valid <= 1'b0;
-    end
-    else
-    begin
+    end else begin
       inst_buffer_valid <= 1'b0;
       inst_buffer <= 32'h0;
     end
   end
 
-  assign IF_inst   = inst_buffer_valid ? inst_buffer : inst_sram_rdata;
+  assign IF_inst = inst_buffer_valid ? inst_buffer : inst_sram_rdata;
   assign IF_ID_bus = {IF_exc_ADEF, IF_inst, IF_pc};
 
   //------------------------------inst sram interface---------------------------------------
 
-  assign inst_sram_req = IF_allowin & resetn & ~br_stall; // IF_allow置0时，不请求数据
+  assign inst_sram_req = IF_allowin & resetn & ~br_stall& ~pre_IF_block ; // IF_allow置0时，不请求数据 ***********这里加了一个控制信号     
   assign inst_sram_wr = |inst_sram_wstrb;  //置0，IF_stage不写入指令存储器
   assign inst_sram_wstrb = 4'b0;  // 置0，IF_stage不写入指令存储器
   assign inst_sram_addr = nextpc;
-  assign inst_sram_wdata = 32'b0; // 置0，IF_stage不写入指令存储器
+  assign inst_sram_wdata = 32'b0;  // 置0，IF_stage不写入指令存储器
   assign inst_sram_size = 3'b0;
 
   //------------------------------cancel signal----------------------------------------------
   assign IF_cancel = WB_EXC_signal | WB_ERTN_signal | br_taken;
   //丢弃指令部分
-  always @(posedge clk)
-  begin
-    if (~resetn)
-      inst_discard <= 1'b0;
+  always @(posedge clk) begin
+    if (~resetn) inst_discard <= 1'b0;
     else if (!inst_sram_data_ok && IF_cancel & ~IF_allowin & ~IF_ready_go | IF_cancel & (WB_EXC_signal | WB_ERTN_signal) & ~IF_ready_go & IF_valid)  //allowin=0且ready_go=0时
       inst_discard <= 1'b1;
     else if (inst_discard & inst_sram_data_ok)  //需要抹去一条指令
@@ -162,32 +154,22 @@ module IF_stage (
   end
   //------------------------------PC buffer----------------------------------------------
   // 使用缓冲寄存器存储异常返回地址或者分支跳转地址，以避免等待addr_ok信号的过程中pc值被覆盖
-  always @(posedge clk)
-  begin
-    if (~resetn)
-    begin
+  always @(posedge clk) begin
+    if (~resetn) begin
       PC_buf_valid <= 1'b0;
       PC_buffer <= 32'h0;
-    end
-    else if (pre_IF_ready_go)
-    begin
-      PC_buf_valid <= 1'b0;
-      PC_buffer <= 32'h0;
-    end
-    else if (WB_EXC_signal)
-    begin
-      PC_buffer  <= CSR_2_IF_pc;
-      PC_buf_valid <= 1'b1;
-    end
-    else if (WB_ERTN_signal)
-    begin
+    end else if (WB_EXC_signal) begin
       PC_buffer <= CSR_2_IF_pc;
       PC_buf_valid <= 1'b1;
-    end
-    else if (br_taken)
-    begin
+    end else if (WB_ERTN_signal) begin
+      PC_buffer <= CSR_2_IF_pc;
+      PC_buf_valid <= 1'b1;
+    end else if (br_taken) begin
       PC_buffer <= br_target;
-      PC_buf_valid  <= 1'b1;
+      PC_buf_valid <= 1'b1;
+    end else if (pre_IF_ready_go) begin
+      PC_buf_valid <= 1'b0;
+      PC_buffer <= 32'h0;
     end
   end
   //---------------------------------exception signal-----------------------------------------
