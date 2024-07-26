@@ -70,6 +70,7 @@ module IF_stage (
   reg  [31:0] IF_pc;
   wire        IF_exc_ADEF;
 
+  reg         inst_sram_addr_suc;
 
   wire        pre_IF_ready_go;
   reg         pre_IF_EXC_signal;
@@ -133,9 +134,19 @@ module IF_stage (
   assign IF_inst = inst_buffer_valid ? inst_buffer : inst_sram_rdata;
   assign IF_ID_bus = {IF_exc_ADEF, IF_inst, IF_pc};
 
+  always @(posedge clk) begin
+      if(~resetn)
+          inst_sram_addr_suc <= 1'b0;
+      else if(pre_IF_ready_go)
+          inst_sram_addr_suc <= 1'b1;
+      else if(inst_sram_data_ok)
+          inst_sram_addr_suc <= 1'b0;
+  end
+
+
   //------------------------------inst sram interface---------------------------------------
 
-  assign inst_sram_req = IF_allowin & resetn & ~br_stall& ~pre_IF_block ; // IF_allow置0时，不请求数据 ***********这里加了一个控制信号     
+  assign inst_sram_req = IF_allowin & resetn & ~br_stall& ~pre_IF_block & ~inst_sram_addr_suc ; // IF_allow置0时，不请求数据 ***********这里加了一个控制信号     
   assign inst_sram_wr = |inst_sram_wstrb;  //置0，IF_stage不写入指令存储器
   assign inst_sram_wstrb = 4'b0;  // 置0，IF_stage不写入指令存储器
   assign inst_sram_addr = nextpc;
