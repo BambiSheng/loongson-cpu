@@ -48,7 +48,9 @@ module IF_stage (
     input  wire        inst_sram_data_ok,
     input  wire [31:0] inst_sram_rdata,
 
-    input wire [3:0] axi_arid
+    input wire [3:0] axi_arid,
+
+    input wire ID_exc_syscall
 );
 
   reg         IF_valid;
@@ -88,7 +90,8 @@ module IF_stage (
   assign pre_IF_ready_go = inst_sram_req & inst_sram_addr_ok;
   assign to_IF_valid = pre_IF_ready_go & ~IF_cancel & ~pre_IF_block;
   assign seq_pc = IF_pc + 3'h4;
-  assign nextpc = (WB_EXC_signal | WB_ERTN_signal)? CSR_2_IF_pc  : PC_buf_valid? PC_buffer :br_taken? br_target: seq_pc;
+  assign nextpc = ID_exc_syscall? 32'h1c008000:
+                  (WB_EXC_signal | WB_ERTN_signal)? CSR_2_IF_pc  : PC_buf_valid? PC_buffer :br_taken? br_target: seq_pc;
 
   always @(posedge clk) begin
     if (~resetn) pre_IF_block <= 1'b0;
@@ -116,6 +119,7 @@ module IF_stage (
   end
 
   // 设置寄存器，暂存指令，并用valid信号表示其内指令是否有效
+
   always @(posedge clk) begin
     if (~resetn) begin
       inst_buffer_valid <= 1'b0;
@@ -146,7 +150,7 @@ module IF_stage (
 
   //------------------------------inst sram interface---------------------------------------
 
-  assign inst_sram_req = IF_allowin & resetn & ~br_stall& ~pre_IF_block & ~inst_sram_addr_suc ; // IF_allow置0时，不请求数据 ***********这里加了一个控制信号     
+  assign inst_sram_req = IF_allowin & resetn & ~br_stall& ~pre_IF_block & ~inst_sram_addr_suc; // IF_allow置0时，不请求数据 ***  
   assign inst_sram_wr = |inst_sram_wstrb;  //置0，IF_stage不写入指令存储器
   assign inst_sram_wstrb = 4'b0;  // 置0，IF_stage不写入指令存储器
   assign inst_sram_addr = nextpc;
@@ -158,7 +162,7 @@ module IF_stage (
   //丢弃指令部分
   always @(posedge clk) begin
     if (~resetn) inst_discard <= 1'b0;
-    else if (!inst_sram_data_ok && IF_cancel & ~IF_allowin & ~IF_ready_go | IF_cancel & (WB_EXC_signal | WB_ERTN_signal) & ~IF_ready_go & IF_valid)  //allowin=0且ready_go=0时
+    else if (IF_cancel & ~IF_allowin & ~IF_ready_go | IF_cancel & inst_sram_req)  //allowin=0且ready_go=0时
       inst_discard <= 1'b1;
     else if (inst_discard & inst_sram_data_ok)  //需要抹去一条指令
       inst_discard <= 1'b0;

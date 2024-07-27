@@ -37,7 +37,9 @@ module ID_stage (
     input wire [39:0] EX_rf_bus,    // {EX_csr_re,EX_res_from_mem, EX_rf_we, EX_rf_waddr, EX_alu_result}
 
     input wire WB_EXC_signal,
-    input wire INT_signal
+    input wire INT_signal,
+
+    output wire ID_exc_syscall
 );
 
   wire        ID_ready_go;

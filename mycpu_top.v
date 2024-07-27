@@ -125,6 +125,8 @@ module mycpu_top(
     wire        data_sram_data_ok;
     wire [31:0] data_sram_rdata;
 
+    wire ID_exc_syscall;
+
   bridge_sram_axi my_bridge_sram_axi(
     .aclk               (aclk               ),
     .aresetn            (aresetn            ),
@@ -211,7 +213,9 @@ module mycpu_top(
       .WB_EXC_signal(WB_EXC_signal),
       .WB_ERTN_signal(ERTN_signal),
       .CSR_2_IF_pc(CSR_2_IF_pc),
-      .axi_arid(arid)
+      .axi_arid(arid),
+
+      .ID_exc_syscall(ID_exc_syscall)
   );
 
   ID_stage ID (
@@ -233,7 +237,9 @@ module mycpu_top(
       .ID_except_bus(ID_except_bus),
 
       .WB_EXC_signal(WB_EXC_signal | ERTN_signal),
-      .INT_signal(INT_signal)
+      .INT_signal(INT_signal),
+
+      .ID_exc_syscall(ID_exc_syscall)
   );
 
   EX_stage EX (
